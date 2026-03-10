@@ -1,0 +1,507 @@
+{{- if .Values.crds.install -}}
+---
+# Source: generated from api/v1alpha1/opentaloninstance_types.go
+# To regenerate: make manifests
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+    {{- if .Values.crds.keep }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+  name: opentaloninstances.opentalon.io
+  labels:
+    {{- include "opentalon-operator.labels" . | nindent 4 }}
+spec:
+  group: opentalon.io
+  names:
+    categories:
+      - opentalon
+    kind: OpenTalonInstance
+    listKind: OpenTalonInstanceList
+    plural: opentaloninstances
+    shortNames:
+      - oti
+    singular: opentaloninstance
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .status.phase
+          name: Phase
+          type: string
+        - jsonPath: .status.readyReplicas
+          name: Ready
+          type: integer
+        - jsonPath: .status.currentImage
+          name: Image
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: OpenTalonInstance is the Schema for the opentaloninstances API.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: OpenTalonInstanceSpec defines the desired state.
+              properties:
+                image:
+                  properties:
+                    repository:
+                      default: ghcr.io/opentalon/opentalon
+                      type: string
+                    tag:
+                      default: latest
+                      type: string
+                    digest:
+                      type: string
+                    pullPolicy:
+                      default: IfNotPresent
+                      enum: [Always, Never, IfNotPresent]
+                      type: string
+                    pullSecrets:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                        type: object
+                      type: array
+                  type: object
+                config:
+                  properties:
+                    models:
+                      items:
+                        properties:
+                          name:
+                            minLength: 1
+                            type: string
+                          provider:
+                            minLength: 1
+                            type: string
+                          apiKeySecret:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                              optional:
+                                type: boolean
+                            required: [key]
+                            type: object
+                          baseURL:
+                            type: string
+                          contextWindow:
+                            format: int64
+                            type: integer
+                          maxTokens:
+                            type: integer
+                        required: [name, provider]
+                        type: object
+                      type: array
+                    routing:
+                      properties:
+                        primary:
+                          type: string
+                        fallbacks:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    channels:
+                      properties:
+                        console:
+                          properties:
+                            enabled:
+                              default: true
+                              type: boolean
+                          type: object
+                        slack:
+                          properties:
+                            enabled:
+                              default: true
+                              type: boolean
+                            tokenSecret:
+                              properties:
+                                key:
+                                  type: string
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              required: [key]
+                              type: object
+                            appTokenSecret:
+                              properties:
+                                key:
+                                  type: string
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              required: [key]
+                              type: object
+                          required: [tokenSecret]
+                          type: object
+                        webhook:
+                          properties:
+                            enabled:
+                              default: true
+                              type: boolean
+                            port:
+                              default: 8080
+                              format: int32
+                              minimum: 1
+                              maximum: 65535
+                              type: integer
+                            path:
+                              default: /webhook
+                              type: string
+                          type: object
+                        websocket:
+                          properties:
+                            enabled:
+                              default: true
+                              type: boolean
+                            port:
+                              default: 8081
+                              format: int32
+                              minimum: 1
+                              maximum: 65535
+                              type: integer
+                          type: object
+                      type: object
+                    plugins:
+                      items:
+                        properties:
+                          name:
+                            minLength: 1
+                            type: string
+                          source:
+                            minLength: 1
+                            type: string
+                          args:
+                            items:
+                              type: string
+                            type: array
+                          env:
+                            items:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                            type: array
+                        required: [name, source]
+                        type: object
+                      type: array
+                    state:
+                      properties:
+                        path:
+                          default: /data/opentalon.db
+                          type: string
+                        maxMessages:
+                          type: integer
+                        idleSessionTTL:
+                          type: string
+                        summarize:
+                          type: boolean
+                      type: object
+                    logging:
+                      properties:
+                        level:
+                          default: info
+                          enum: [debug, info, warn, error]
+                          type: string
+                        format:
+                          default: json
+                          enum: [json, text]
+                          type: string
+                      type: object
+                    extraConfig:
+                      type: string
+                  type: object
+                configFrom:
+                  properties:
+                    name:
+                      type: string
+                  type: object
+                envFrom:
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+                env:
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+                resources:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                storage:
+                  properties:
+                    persistence:
+                      properties:
+                        enabled:
+                          default: true
+                          type: boolean
+                        size:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          default: 1Gi
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        storageClassName:
+                          type: string
+                        existingClaim:
+                          type: string
+                        accessModes:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                  type: object
+                networking:
+                  properties:
+                    service:
+                      properties:
+                        type:
+                          default: ClusterIP
+                          enum: [ClusterIP, NodePort, LoadBalancer, ExternalName]
+                          type: string
+                        port:
+                          default: 8080
+                          format: int32
+                          minimum: 1
+                          maximum: 65535
+                          type: integer
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        labels:
+                          additionalProperties:
+                            type: string
+                          type: object
+                      type: object
+                    ingress:
+                      properties:
+                        enabled:
+                          type: boolean
+                        className:
+                          type: string
+                        host:
+                          type: string
+                        tlsSecretName:
+                          type: string
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          type: object
+                      type: object
+                    networkPolicy:
+                      properties:
+                        enabled:
+                          type: boolean
+                        ingressRules:
+                          items:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          type: array
+                        egressRules:
+                          items:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          type: array
+                      type: object
+                  type: object
+                security:
+                  properties:
+                    podSecurityContext:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    containerSecurityContext:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    runAsUser:
+                      default: 1000
+                      format: int64
+                      type: integer
+                    runAsGroup:
+                      default: 1000
+                      format: int64
+                      type: integer
+                    readOnlyRootFilesystem:
+                      default: true
+                      type: boolean
+                  type: object
+                observability:
+                  properties:
+                    metrics:
+                      properties:
+                        enabled:
+                          default: true
+                          type: boolean
+                        port:
+                          default: 9090
+                          format: int32
+                          minimum: 1
+                          maximum: 65535
+                          type: integer
+                        path:
+                          default: /metrics
+                          type: string
+                        serviceMonitor:
+                          properties:
+                            enabled:
+                              type: boolean
+                            interval:
+                              default: 30s
+                              type: string
+                            labels:
+                              additionalProperties:
+                                type: string
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+                availability:
+                  properties:
+                    podDisruptionBudget:
+                      properties:
+                        enabled:
+                          type: boolean
+                        minAvailable:
+                          format: int32
+                          type: integer
+                        maxUnavailable:
+                          format: int32
+                          type: integer
+                      type: object
+                    horizontalPodAutoscaler:
+                      properties:
+                        enabled:
+                          type: boolean
+                        minReplicas:
+                          default: 1
+                          format: int32
+                          minimum: 1
+                          type: integer
+                        maxReplicas:
+                          default: 5
+                          format: int32
+                          minimum: 1
+                          type: integer
+                        cpuUtilization:
+                          format: int32
+                          type: integer
+                        memoryUtilization:
+                          format: int32
+                          type: integer
+                      type: object
+                  type: object
+                autoUpdate:
+                  properties:
+                    enabled:
+                      type: boolean
+                    schedule:
+                      default: 0 2 * * *
+                      type: string
+                    allowPrerelease:
+                      type: boolean
+                  type: object
+                replicas:
+                  default: 1
+                  format: int32
+                  minimum: 0
+                  type: integer
+                nodeSelector:
+                  additionalProperties:
+                    type: string
+                  type: object
+                tolerations:
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+                affinity:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                serviceAccountName:
+                  type: string
+                additionalContainers:
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+                initContainers:
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+              type: object
+            status:
+              properties:
+                phase:
+                  type: string
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        enum: ["True", "False", Unknown]
+                        type: string
+                      type:
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required: [lastTransitionTime, message, reason, status, type]
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys: [type]
+                  x-kubernetes-list-type: map
+                observedGeneration:
+                  format: int64
+                  type: integer
+                readyReplicas:
+                  format: int32
+                  type: integer
+                currentImage:
+                  type: string
+                managedResources:
+                  items:
+                    type: string
+                  type: array
+                lastUpdateTime:
+                  format: date-time
+                  type: string
+              type: object
+          type: object
+      served: true
+      storage: true
+      subresources:
+        scale:
+          specReplicasPath: .spec.replicas
+          statusReplicasPath: .status.readyReplicas
+        status: {}
+{{- end }}

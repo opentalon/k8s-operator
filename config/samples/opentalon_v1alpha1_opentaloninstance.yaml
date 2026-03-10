@@ -1,0 +1,70 @@
+apiVersion: opentalon.io/v1alpha1
+kind: OpenTalonInstance
+metadata:
+  name: my-opentalon
+  namespace: default
+  labels:
+    app.kubernetes.io/name: opentalon
+    app.kubernetes.io/instance: my-opentalon
+spec:
+  # Image configuration — defaults to ghcr.io/opentalon/opentalon:latest
+  image:
+    repository: ghcr.io/opentalon/opentalon
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  # Inject API keys from a pre-existing Secret called opentalon-api-keys.
+  # The Secret should contain keys such as ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
+  envFrom:
+    - secretRef:
+        name: opentalon-api-keys
+
+  # Inline configuration rendered into /etc/opentalon/config.yaml.
+  config:
+    models:
+      - name: claude-sonnet-4-6
+        provider: anthropic
+    routing:
+      primary: claude-sonnet-4-6
+    channels:
+      webhook:
+        enabled: true
+        port: 8080
+        path: /webhook
+    state:
+      path: /data/opentalon.db
+    logging:
+      level: info
+      format: json
+
+  # Replica count (default 1).
+  replicas: 1
+
+  # Resource requests and limits.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Persistent storage for the SQLite database.
+  storage:
+    persistence:
+      enabled: true
+      size: 1Gi
+      # storageClassName: standard  # uncomment to override the cluster default
+
+  # Service configuration.
+  networking:
+    service:
+      type: ClusterIP
+      port: 8080
+
+  # Observability — expose a /metrics endpoint on port 9090.
+  observability:
+    metrics:
+      enabled: true
+      port: 9090
+      path: /metrics

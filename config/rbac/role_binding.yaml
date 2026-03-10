@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opentalon-operator-manager-rolebinding
+  labels:
+    app.kubernetes.io/name: opentalon-operator
+    app.kubernetes.io/component: controller-manager
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opentalon-operator-manager-role
+subjects:
+  - kind: ServiceAccount
+    name: opentalon-operator-controller-manager
+    namespace: opentalon-operator-system
