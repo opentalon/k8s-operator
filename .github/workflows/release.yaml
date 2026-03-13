@@ -15,7 +15,6 @@ jobs:
     permissions:
       contents: write
       packages: write
-      id-token: write  # For signing
 
     steps:
       - name: Checkout
@@ -37,9 +36,6 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3
 
       - name: Install kustomize
         run: |
@@ -66,6 +62,29 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sign-images:
+    name: Sign and Attest
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker image name
         id: docker-image
