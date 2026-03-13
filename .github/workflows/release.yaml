@@ -41,6 +41,22 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
 
+      - name: Install kustomize
+        run: |
+          curl -sL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Generate CRD manifest
+        run: |
+          cat config/crd/bases/*.yaml > opentalon-operator.crds.yaml
+
+      - name: Generate full install manifest
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          cd config/manager && kustomize edit set image controller=${{ env.REGISTRY }}/opentalon/opentalon-operator:${VERSION}
+          cd ${{ github.workspace }}
+          kustomize build config/default > opentalon-operator.install.yaml
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -62,7 +78,7 @@ jobs:
           VERSION="${VERSION#v}"
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
-          TAGS=("latest" "${{ github.ref_name }}" "${MAJOR}.${MINOR}")
+          TAGS=("latest" "${{ github.ref_name }}" "v${MAJOR}.${MINOR}")
 
           for tag in "${TAGS[@]}"; do
             echo "Signing ${IMAGE}:${tag}..."
