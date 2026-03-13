@@ -309,10 +309,11 @@ git push origin v1.2.3
 
 The release workflow then:
 
-1. Builds and pushes multi-arch Docker images (`linux/amd64`, `linux/arm64`)
-2. Signs images with [Cosign](https://github.com/sigstore/cosign)
-3. Generates and attests an SBOM
-4. Packages and pushes the Helm chart to the OCI registry
+1. Generates CRD and install manifests for `kubectl apply` installation
+2. Builds and pushes multi-arch Docker images (`linux/amd64`, `linux/arm64`)
+3. Signs images with [Cosign](https://github.com/sigstore/cosign)
+4. Generates and attests an SBOM
+5. Packages and pushes the Helm chart to the OCI registry
 
 ## License
 
