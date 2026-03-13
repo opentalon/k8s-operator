@@ -53,7 +53,8 @@ jobs:
       - name: Generate full install manifest
         run: |
           VERSION="${GITHUB_REF#refs/tags/}"
-          cd config/manager && kustomize edit set image controller=${{ env.REGISTRY }}/opentalon/opentalon-operator:${VERSION}
+          cd config/default
+          kustomize edit set image ghcr.io/opentalon/opentalon-operator=${{ env.REGISTRY }}/opentalon/opentalon-operator:${VERSION}
           cd ${{ github.workspace }}
           kustomize build config/default > opentalon-operator.install.yaml
 
