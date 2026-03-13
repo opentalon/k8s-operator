@@ -78,7 +78,7 @@ helm install opentalon-operator oci://ghcr.io/opentalon/charts/opentalon-operato
 kubectl apply -f https://github.com/opentalon/k8s-operator/releases/latest/download/opentalon-operator.crds.yaml
 
 # Deploy the operator
-kubectl apply -f https://github.com/opentalon/k8s-operator/releases/latest/download/opentalon-operator.yaml
+kubectl apply -f https://github.com/opentalon/k8s-operator/releases/latest/download/opentalon-operator.install.yaml
 ```
 
 ### Deploy an instance
