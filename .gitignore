@@ -43,3 +43,7 @@ charts/*/Chart.lock
 # Local env files
 .env
 .env.local
+
+# Generated release manifests
+opentalon-operator.crds.yaml
+opentalon-operator.install.yaml

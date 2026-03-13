@@ -57,6 +57,7 @@ jobs:
           kustomize edit set image ghcr.io/opentalon/opentalon-operator=${{ env.REGISTRY }}/opentalon/opentalon-operator:${VERSION}
           cd ${{ github.workspace }}
           kustomize build config/default > opentalon-operator.install.yaml
+          git checkout config/default/kustomization.yaml
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
