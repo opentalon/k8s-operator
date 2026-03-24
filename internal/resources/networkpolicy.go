@@ -15,8 +15,8 @@
 package resources
 
 import (
-	networkingv1 "k8s.io/api/networking/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -99,7 +99,7 @@ func buildDefaultIngressRules(instance *v1alpha1.OpenTalonInstance) []networking
 	}
 
 	// Metrics ingress — allow Prometheus scraping from anywhere in the cluster.
-	if instance.Spec.Observability.Metrics.Enabled {
+	if instance.Spec.Observability.Metrics.Enabled != nil && *instance.Spec.Observability.Metrics.Enabled {
 		metricsPort := instance.Spec.Observability.Metrics.Port
 		if metricsPort == 0 {
 			metricsPort = 9090

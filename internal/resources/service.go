@@ -103,7 +103,7 @@ func buildServicePorts(instance *v1alpha1.OpenTalonInstance) []corev1.ServicePor
 	}
 
 	// Metrics port.
-	if instance.Spec.Observability.Metrics.Enabled {
+	if instance.Spec.Observability.Metrics.Enabled != nil && *instance.Spec.Observability.Metrics.Enabled {
 		metricsPort := instance.Spec.Observability.Metrics.Port
 		if metricsPort == 0 {
 			metricsPort = 9090

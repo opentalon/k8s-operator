@@ -279,7 +279,7 @@ func httpProbePort(instance *v1alpha1.OpenTalonInstance) int32 {
 			return 8080
 		}
 	}
-	if instance.Spec.Observability.Metrics.Enabled {
+	if instance.Spec.Observability.Metrics.Enabled != nil && *instance.Spec.Observability.Metrics.Enabled {
 		p := instance.Spec.Observability.Metrics.Port
 		if p > 0 {
 			return p
@@ -310,7 +310,7 @@ func buildContainerPorts(instance *v1alpha1.OpenTalonInstance) []corev1.Containe
 		}
 	}
 
-	if instance.Spec.Observability.Metrics.Enabled {
+	if instance.Spec.Observability.Metrics.Enabled != nil && *instance.Spec.Observability.Metrics.Enabled {
 		p := instance.Spec.Observability.Metrics.Port
 		if p == 0 {
 			p = 9090

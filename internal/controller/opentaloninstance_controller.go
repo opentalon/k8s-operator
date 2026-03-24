@@ -714,4 +714,3 @@ func statefulSetNeedsUpdate(existing, desired *appsv1.StatefulSet) bool {
 	}
 	return false
 }
-
