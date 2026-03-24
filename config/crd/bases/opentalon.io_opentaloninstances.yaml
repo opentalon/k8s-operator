@@ -478,8 +478,8 @@ spec:
                       description: Metrics configures the Prometheus metrics endpoint.
                       properties:
                         enabled:
-                          default: true
                           description: Enabled enables the metrics HTTP endpoint.
+                          nullable: true
                           type: boolean
                         path:
                           default: /metrics

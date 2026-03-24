@@ -507,8 +507,7 @@ type ObservabilitySpec struct {
 type MetricsSpec struct {
 	// Enabled enables the metrics HTTP endpoint.
 	// +optional
-	// +kubebuilder:default=true
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// Port is the port on which metrics are served.
 	// +optional

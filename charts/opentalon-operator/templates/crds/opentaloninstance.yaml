@@ -346,7 +346,7 @@ spec:
                     metrics:
                       properties:
                         enabled:
-                          default: true
+                          nullable: true
                           type: boolean
                         port:
                           default: 9090
