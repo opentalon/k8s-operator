@@ -15,8 +15,11 @@
 package resources
 
 import (
+	"strconv"
+
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -24,12 +27,9 @@ import (
 )
 
 const (
-	// ChromeLoginSecretSuffix is appended to the instance name for the VNC password secret.
-	ChromeLoginSecretSuffix = "-chrome-login"
-	// ChromeLoginServiceSuffix is appended to the instance name for the VNC/CDP service.
-	ChromeLoginServiceSuffix = "-chrome-login"
-	// ChromeLoginIngressSuffix is appended to the instance name for the VNC ingress.
-	ChromeLoginIngressSuffix = "-chrome-login"
+	// ChromeLoginSuffix is appended to the instance name for all chrome-login child resources
+	// (Secret, Service, Ingress) so they share a predictable, consistent naming scheme.
+	ChromeLoginSuffix = "-chrome-login"
 
 	// ChromeLoginVNCContainerName is the sidecar container name inside the StatefulSet pod.
 	ChromeLoginVNCContainerName = "chrome-login"
@@ -37,24 +37,21 @@ const (
 	// ChromeLoginPasswordKey is the key in the Secret that holds the VNC password.
 	ChromeLoginPasswordKey = "password"
 
-	// chromeLoginExternalCDPPort is the port on the Service that maps to the sidecar CDP port.
-	// Using 9223 avoids conflict with a headless-shell sidecar that may occupy 9222.
-	chromeLoginExternalCDPPort = int32(9223)
 )
 
 // ChromeLoginSecretName returns the name of the Secret holding the VNC password.
 func ChromeLoginSecretName(instance *v1alpha1.OpenTalonInstance) string {
-	return instance.Name + ChromeLoginSecretSuffix
+	return instance.Name + ChromeLoginSuffix
 }
 
 // ChromeLoginServiceName returns the name of the Service for the VNC + CDP ports.
 func ChromeLoginServiceName(instance *v1alpha1.OpenTalonInstance) string {
-	return instance.Name + ChromeLoginServiceSuffix
+	return instance.Name + ChromeLoginSuffix
 }
 
 // ChromeLoginIngressName returns the name of the Ingress for the VNC web UI.
 func ChromeLoginIngressName(instance *v1alpha1.OpenTalonInstance) string {
-	return instance.Name + ChromeLoginIngressSuffix
+	return instance.Name + ChromeLoginSuffix
 }
 
 // ChromeLoginLabels returns the label set for chrome-login child resources.
@@ -65,9 +62,8 @@ func ChromeLoginLabels(instance *v1alpha1.OpenTalonInstance) map[string]string {
 }
 
 // BuildChromeLoginSecret returns a Secret that stores the noVNC session password.
-// The caller must check whether the Secret already exists and skip creation if so
-// (passwords must never be regenerated; they are supplied externally via a generated
-// UUID or managed via controller).
+// Callers must only invoke this when the Secret does not already exist; the
+// controller never rotates the password in place.
 func BuildChromeLoginSecret(instance *v1alpha1.OpenTalonInstance, password string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -91,10 +87,6 @@ func BuildChromeLoginService(instance *v1alpha1.OpenTalonInstance) *corev1.Servi
 	if vncPort == 0 {
 		vncPort = 3000
 	}
-	cdpPort := cl.CDPPort
-	if cdpPort == 0 {
-		cdpPort = 9222
-	}
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -110,12 +102,6 @@ func BuildChromeLoginService(instance *v1alpha1.OpenTalonInstance) *corev1.Servi
 					Name:       "vnc",
 					Port:       vncPort,
 					TargetPort: intstr.FromInt32(vncPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-				{
-					Name:       "cdp",
-					Port:       chromeLoginExternalCDPPort, // 9223 externally
-					TargetPort: intstr.FromInt32(cdpPort),  // maps to sidecar's 9222
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
@@ -205,6 +191,31 @@ func ChromeLoginSidecarContainer(instance *v1alpha1.OpenTalonInstance) corev1.Co
 		cdpPort = 9222
 	}
 
+	res := cl.Resources
+	if res.Requests == nil && res.Limits == nil {
+		res = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("250m"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+		}
+	}
+
+	falseVal := false
+	sc := cl.SecurityContext
+	if sc == nil {
+		sc = &corev1.SecurityContext{
+			AllowPrivilegeEscalation: &falseVal,
+			SeccompProfile: &corev1.SeccompProfile{
+				Type: corev1.SeccompProfileTypeRuntimeDefault,
+			},
+		}
+	}
+
 	return corev1.Container{
 		Name:  ChromeLoginVNCContainerName,
 		Image: image,
@@ -228,7 +239,32 @@ func ChromeLoginSidecarContainer(instance *v1alpha1.OpenTalonInstance) corev1.Co
 			{Name: "vnc", ContainerPort: vncPort, Protocol: corev1.ProtocolTCP},
 			{Name: "cdp", ContainerPort: cdpPort, Protocol: corev1.ProtocolTCP},
 		},
+		// Mount the Chrome profile directory from the shared data PVC so that cookies
+		// and session state survive pod restarts. linuxserver/chromium stores its
+		// profile under /config; the subpath keeps it isolated from the main container.
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      DataVolumeName,
+				MountPath: "/config",
+				SubPath:   "chrome-login",
+			},
+		},
+		Resources:       res,
+		SecurityContext: sc,
 	}
+}
+
+// ChromeLoginURL returns the public URL for the Chrome+noVNC session derived from the
+// ingress spec, or an empty string when no ingress is configured or enabled.
+func ChromeLoginURL(cl *v1alpha1.ChromeLoginSpec) string {
+	if cl == nil || cl.Ingress == nil || !cl.Ingress.Enabled || cl.Ingress.Host == "" {
+		return ""
+	}
+	scheme := "http"
+	if cl.Ingress.TLSSecretName != "" {
+		scheme = "https"
+	}
+	return scheme + "://" + cl.Ingress.Host
 }
 
 // ChromeLoginEnvVars returns the environment variables to inject into the main OpenTalon
@@ -242,19 +278,12 @@ func ChromeLoginEnvVars(instance *v1alpha1.OpenTalonInstance) []corev1.EnvVar {
 		cdpPort = 9222
 	}
 
-	loginURL := ""
-	if cl.Ingress != nil && cl.Ingress.Enabled && cl.Ingress.Host != "" {
-		scheme := "http"
-		if cl.Ingress.TLSSecretName != "" {
-			scheme = "https"
-		}
-		loginURL = scheme + "://" + cl.Ingress.Host
-	}
+	loginURL := ChromeLoginURL(cl)
 
 	vars := []corev1.EnvVar{
 		// CDP URL for the opentalon-chrome plugin to connect to the VNC Chrome.
 		// The sidecar runs in the same pod so localhost works.
-		{Name: "CHROME_LOGIN_CDP_URL", Value: "http://localhost:" + int32ToString(cdpPort)},
+		{Name: "CHROME_LOGIN_CDP_URL", Value: "http://localhost:" + strconv.Itoa(int(cdpPort))},
 		// Path for the credential SQLite DB (reuses the existing persistent data volume).
 		{Name: "CHROME_DATA_DIR", Value: DataMountPath + "/chrome-credentials"},
 		// Password for the VNC session — forwarded to the user by the agent.
@@ -276,28 +305,4 @@ func ChromeLoginEnvVars(instance *v1alpha1.OpenTalonInstance) []corev1.EnvVar {
 	}
 
 	return vars
-}
-
-// int32ToString converts an int32 to its decimal string representation without
-// importing strconv in this file (avoids an otherwise-unused import).
-func int32ToString(n int32) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	buf := [20]byte{}
-	pos := len(buf)
-	for n > 0 {
-		pos--
-		buf[pos] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
 }

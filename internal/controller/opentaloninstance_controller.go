@@ -297,11 +297,7 @@ func (r *OpenTalonInstanceReconciler) reconcileResources(
 		if err != nil {
 			return fmt.Errorf("ChromeLogin: %w", err)
 		}
-		patch := client.MergeFrom(instance.DeepCopy())
 		instance.Status.ChromeLoginURL = chromeLoginURL
-		if pErr := r.Status().Patch(ctx, instance, patch); pErr != nil && !apierrors.IsConflict(pErr) {
-			return fmt.Errorf("ChromeLogin status: %w", pErr)
-		}
 		managedResources = append(managedResources, "Secret/"+resources.ChromeLoginSecretName(instance))
 		managedResources = append(managedResources, "Service/"+resources.ChromeLoginServiceName(instance))
 		if instance.Spec.ChromeLogin.Ingress != nil && instance.Spec.ChromeLogin.Ingress.Enabled {
@@ -692,15 +688,7 @@ func (r *OpenTalonInstanceReconciler) reconcileChromeLogin(
 		if err := r.createOrUpdateIngress(ctx, instance, ingress); err != nil {
 			return "", fmt.Errorf("chrome-login ingress: %w", err)
 		}
-		// Derive the public URL from the ingress spec.
-		ingressSpec := instance.Spec.ChromeLogin.Ingress
-		scheme := "http"
-		if ingressSpec.TLSSecretName != "" {
-			scheme = "https"
-		}
-		if ingressSpec.Host != "" {
-			loginURL = scheme + "://" + ingressSpec.Host
-		}
+		loginURL = resources.ChromeLoginURL(instance.Spec.ChromeLogin)
 	}
 
 	return loginURL, nil

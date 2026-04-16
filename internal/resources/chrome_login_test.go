@@ -41,7 +41,7 @@ func newChromeInstance(name, namespace string) *v1alpha1.OpenTalonInstance {
 func TestChromeLoginSecretName(t *testing.T) {
 	inst := newChromeInstance("my-bot", "default")
 	got := ChromeLoginSecretName(inst)
-	want := "my-bot" + ChromeLoginSecretSuffix
+	want := "my-bot" + ChromeLoginSuffix
 	if got != want {
 		t.Errorf("ChromeLoginSecretName() = %q, want %q", got, want)
 	}
@@ -50,7 +50,7 @@ func TestChromeLoginSecretName(t *testing.T) {
 func TestChromeLoginServiceName(t *testing.T) {
 	inst := newChromeInstance("my-bot", "default")
 	got := ChromeLoginServiceName(inst)
-	want := "my-bot" + ChromeLoginServiceSuffix
+	want := "my-bot" + ChromeLoginSuffix
 	if got != want {
 		t.Errorf("ChromeLoginServiceName() = %q, want %q", got, want)
 	}
@@ -59,7 +59,7 @@ func TestChromeLoginServiceName(t *testing.T) {
 func TestChromeLoginIngressName(t *testing.T) {
 	inst := newChromeInstance("my-bot", "default")
 	got := ChromeLoginIngressName(inst)
-	want := "my-bot" + ChromeLoginIngressSuffix
+	want := "my-bot" + ChromeLoginSuffix
 	if got != want {
 		t.Errorf("ChromeLoginIngressName() = %q, want %q", got, want)
 	}
@@ -127,9 +127,11 @@ func TestBuildChromeLoginService_DefaultPorts(t *testing.T) {
 		t.Errorf("Service.Type = %q, want ClusterIP", svc.Spec.Type)
 	}
 
-	// Expect 2 ports: vnc (3000) and cdp (9223 externally)
-	if len(svc.Spec.Ports) != 2 {
-		t.Fatalf("Service.Ports count = %d, want 2", len(svc.Spec.Ports))
+	// Expect 1 port: vnc (3000). CDP is not exposed on the Service — the plugin
+	// connects via localhost:9222 inside the same pod, so cluster-wide exposure
+	// would give any pod unauthenticated access to a live browser session.
+	if len(svc.Spec.Ports) != 1 {
+		t.Fatalf("Service.Ports count = %d, want 1", len(svc.Spec.Ports))
 	}
 
 	ports := map[string]int32{}
@@ -139,15 +141,11 @@ func TestBuildChromeLoginService_DefaultPorts(t *testing.T) {
 	if ports["vnc"] != 3000 {
 		t.Errorf("vnc port = %d, want 3000", ports["vnc"])
 	}
-	if ports["cdp"] != chromeLoginExternalCDPPort {
-		t.Errorf("cdp port = %d, want %d", ports["cdp"], chromeLoginExternalCDPPort)
-	}
 }
 
-func TestBuildChromeLoginService_CustomPorts(t *testing.T) {
+func TestBuildChromeLoginService_CustomVNCPort(t *testing.T) {
 	inst := newChromeInstance("bot", "default")
 	inst.Spec.ChromeLogin.VNCPort = 4000
-	inst.Spec.ChromeLogin.CDPPort = 9333
 
 	svc := BuildChromeLoginService(inst)
 
@@ -158,15 +156,8 @@ func TestBuildChromeLoginService_CustomPorts(t *testing.T) {
 	if ports["vnc"] != 4000 {
 		t.Errorf("vnc port = %d, want 4000", ports["vnc"])
 	}
-	// CDP external port stays fixed at chromeLoginExternalCDPPort regardless of CDPPort.
-	if ports["cdp"] != chromeLoginExternalCDPPort {
-		t.Errorf("cdp external port = %d, want %d", ports["cdp"], chromeLoginExternalCDPPort)
-	}
-	// The target port for cdp should map to the custom CDP port.
-	for _, p := range svc.Spec.Ports {
-		if p.Name == "cdp" && p.TargetPort.IntVal != 9333 {
-			t.Errorf("cdp target port = %d, want 9333", p.TargetPort.IntVal)
-		}
+	if _, ok := ports["cdp"]; ok {
+		t.Error("cdp port must not be exposed on the Service")
 	}
 }
 
@@ -466,27 +457,6 @@ func TestChromeLoginEnvVars_LoginURL_HTTPS_WhenTLS(t *testing.T) {
 		}
 	}
 	t.Error("CHROME_LOGIN_URL not set when TLS ingress configured")
-}
-
-// ── int32ToString ─────────────────────────────────────────────────────────────
-
-func TestInt32ToString(t *testing.T) {
-	tests := []struct {
-		n    int32
-		want string
-	}{
-		{0, "0"},
-		{1, "1"},
-		{9222, "9222"},
-		{-1, "-1"},
-		{-9222, "-9222"},
-	}
-	for _, tc := range tests {
-		got := int32ToString(tc.n)
-		if got != tc.want {
-			t.Errorf("int32ToString(%d) = %q, want %q", tc.n, got, tc.want)
-		}
-	}
 }
 
 // ── StatefulSet chrome-login integration ─────────────────────────────────────

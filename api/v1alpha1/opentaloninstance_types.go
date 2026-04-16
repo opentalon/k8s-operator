@@ -712,6 +712,16 @@ type ChromeLoginSpec struct {
 	// When omitted the session is accessible only via kubectl port-forward.
 	// +optional
 	Ingress *IngressSpec `json:"ingress,omitempty"`
+
+	// Resources sets CPU/memory requests and limits for the Chrome+noVNC sidecar.
+	// Defaults to 250m/512Mi requests and 1/1Gi limits when not specified.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// SecurityContext overrides the security context applied to the Chrome+noVNC sidecar.
+	// Defaults to allowPrivilegeEscalation:false and seccompProfile:RuntimeDefault.
+	// +optional
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 func init() {
