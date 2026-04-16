@@ -107,7 +107,7 @@ func BuildStatefulSet(instance *v1alpha1.OpenTalonInstance, configHash string) *
 					Tolerations:                  instance.Spec.Tolerations,
 					Affinity:                     instance.Spec.Affinity,
 					InitContainers:               instance.Spec.InitContainers,
-					Containers:                   append([]corev1.Container{container}, instance.Spec.AdditionalContainers...),
+					Containers:                   buildContainers(instance, container),
 					Volumes:                      volumes,
 				},
 			},
@@ -201,11 +201,27 @@ func buildMainContainer(
 		}
 	}
 
+	// Inject chrome-login env vars when the VNC sidecar is enabled.
+	if instance.Spec.ChromeLogin != nil {
+		container.Env = append(container.Env, ChromeLoginEnvVars(instance)...)
+	}
+
 	// Add liveness and readiness probes based on which channel is enabled.
 	container.LivenessProbe = buildLivenessProbe(instance)
 	container.ReadinessProbe = buildReadinessProbe(instance)
 
 	return container
+}
+
+// buildContainers assembles the full container list for the StatefulSet pod.
+// It always includes the main OpenTalon container, optionally adds the chrome-login
+// VNC sidecar, and appends any user-defined AdditionalContainers.
+func buildContainers(instance *v1alpha1.OpenTalonInstance, main corev1.Container) []corev1.Container {
+	containers := []corev1.Container{main}
+	if instance.Spec.ChromeLogin != nil {
+		containers = append(containers, ChromeLoginSidecarContainer(instance))
+	}
+	return append(containers, instance.Spec.AdditionalContainers...)
 }
 
 // buildLivenessProbe returns an appropriate liveness probe.

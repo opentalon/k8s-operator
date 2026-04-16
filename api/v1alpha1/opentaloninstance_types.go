@@ -123,6 +123,12 @@ type OpenTalonInstanceSpec struct {
 	// When empty the operator creates and manages a dedicated service account.
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// ChromeLogin deploys an interactive Chrome+VNC sidecar for cookie-capture
+	// login sessions. Users open the VNC URL in their browser to log into
+	// third-party services; opentalon-chrome then captures the session cookies via CDP.
+	// +optional
+	ChromeLogin *ChromeLoginSpec `json:"chromeLogin,omitempty"`
 }
 
 // ImageSpec configures the OpenTalon container image.
@@ -645,6 +651,11 @@ type OpenTalonInstanceStatus struct {
 	// LastUpdateTime records when the status was last written.
 	// +optional
 	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+
+	// ChromeLoginURL is the public URL of the interactive VNC Chrome session,
+	// populated when spec.chromeLogin is enabled and an Ingress host is configured.
+	// +optional
+	ChromeLoginURL string `json:"chromeLoginURL,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -673,6 +684,34 @@ type OpenTalonInstanceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []OpenTalonInstance `json:"items"`
+}
+
+// ChromeLoginSpec configures an interactive Chrome+noVNC sidecar for cookie-capture login sessions.
+type ChromeLoginSpec struct {
+	// Image is the container image for the Chrome+noVNC sidecar.
+	// lscr.io/linuxserver/chromium exposes noVNC on port 3000 and CDP on port 9222.
+	// +optional
+	// +kubebuilder:default="lscr.io/linuxserver/chromium:latest"
+	Image string `json:"image,omitempty"`
+
+	// VNCPort is the noVNC web UI port exposed by the sidecar (default: 3000).
+	// +optional
+	// +kubebuilder:default=3000
+	VNCPort int32 `json:"vncPort,omitempty"`
+
+	// CDPPort is the Chrome DevTools Protocol port inside the sidecar (default: 9222).
+	// The Service exposes it as 9223 externally to avoid clashing with a separate
+	// headless-shell sidecar that also uses 9222.
+	// +optional
+	// +kubebuilder:default=9222
+	CDPPort int32 `json:"cdpPort,omitempty"`
+
+	// Ingress configures external HTTPS access to the noVNC web UI.
+	// Reuses IngressSpec so TLS/Let's Encrypt works the same way as the main ingress:
+	//   tlsSecretName sets the TLS secret, annotations carry cert-manager directives.
+	// When omitted the session is accessible only via kubectl port-forward.
+	// +optional
+	Ingress *IngressSpec `json:"ingress,omitempty"`
 }
 
 func init() {
