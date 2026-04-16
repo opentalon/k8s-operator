@@ -16,6 +16,7 @@ package controller
 
 import (
 	"context"
+	cryptoRand "crypto/rand"
 	"fmt"
 	"sort"
 	"time"
@@ -288,6 +289,20 @@ func (r *OpenTalonInstanceReconciler) reconcileResources(
 			return fmt.Errorf("HorizontalPodAutoscaler: %w", err)
 		}
 		managedResources = append(managedResources, "HorizontalPodAutoscaler/"+hpa.Name)
+	}
+
+	// 12. ChromeLogin resources (optional) ─────────────────────────────────────
+	if instance.Spec.ChromeLogin != nil {
+		chromeLoginURL, err := r.reconcileChromeLogin(ctx, instance)
+		if err != nil {
+			return fmt.Errorf("ChromeLogin: %w", err)
+		}
+		instance.Status.ChromeLoginURL = chromeLoginURL
+		managedResources = append(managedResources, "Secret/"+resources.ChromeLoginSecretName(instance))
+		managedResources = append(managedResources, "Service/"+resources.ChromeLoginServiceName(instance))
+		if instance.Spec.ChromeLogin.Ingress != nil && instance.Spec.ChromeLogin.Ingress.Enabled {
+			managedResources = append(managedResources, "Ingress/"+resources.ChromeLoginIngressName(instance))
+		}
 	}
 
 	// Persist the managed resource list.
@@ -629,6 +644,63 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateHPA(
 	existing.Spec = desired.Spec
 	existing.Labels = desired.Labels
 	return r.Update(ctx, existing)
+}
+
+// ── ChromeLogin helpers ───────────────────────────────────────────────────────
+
+// reconcileChromeLogin creates or updates the Secret, Service, and optional Ingress
+// for the interactive VNC Chrome login sidecar. It returns the public login URL.
+func (r *OpenTalonInstanceReconciler) reconcileChromeLogin(
+	ctx context.Context,
+	instance *opentalon.OpenTalonInstance,
+) (string, error) {
+	// 1. Secret (password) — create only if missing; never regenerate an existing password.
+	secretName := resources.ChromeLoginSecretName(instance)
+	existingSecret := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Namespace: instance.Namespace, Name: secretName}, existingSecret)
+	if apierrors.IsNotFound(err) {
+		password, genErr := generateToken()
+		if genErr != nil {
+			return "", fmt.Errorf("generate chrome-login password: %w", genErr)
+		}
+		secret := resources.BuildChromeLoginSecret(instance, password)
+		if setErr := controllerutil.SetControllerReference(instance, secret, r.Scheme); setErr != nil {
+			return "", setErr
+		}
+		if createErr := r.Create(ctx, secret); createErr != nil {
+			return "", fmt.Errorf("create chrome-login secret: %w", createErr)
+		}
+	} else if err != nil {
+		return "", err
+	}
+	// If the secret already exists, leave it unchanged.
+
+	// 2. Service
+	svc := resources.BuildChromeLoginService(instance)
+	if err := r.createOrUpdateService(ctx, instance, svc); err != nil {
+		return "", fmt.Errorf("chrome-login service: %w", err)
+	}
+
+	// 3. Ingress (optional)
+	loginURL := ""
+	ingress := resources.BuildChromeLoginIngress(instance)
+	if ingress != nil {
+		if err := r.createOrUpdateIngress(ctx, instance, ingress); err != nil {
+			return "", fmt.Errorf("chrome-login ingress: %w", err)
+		}
+		loginURL = resources.ChromeLoginURL(instance.Spec.ChromeLogin)
+	}
+
+	return loginURL, nil
+}
+
+// generateToken produces a random 32-character hex token suitable for use as a password.
+func generateToken() (string, error) {
+	b := make([]byte, 16)
+	if _, err := cryptoRand.Read(b); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", b), nil
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
