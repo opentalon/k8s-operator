@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   GO_VERSION: '1.24'
@@ -21,12 +21,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v7
         with:
-          version: v1.64.5
-          install-mode: goinstall
-          args: --timeout=5m
+          version: v2.7.2
 
   reconcile-guard:
     name: Reconcile Guard
