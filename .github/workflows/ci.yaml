@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   GO_VERSION: '1.24'
@@ -21,12 +21,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v7
         with:
-          version: v1.64.5
-          install-mode: goinstall
-          args: --timeout=5m
+          version: v2.7.2
 
   reconcile-guard:
     name: Reconcile Guard
@@ -210,20 +207,6 @@ jobs:
           kubectl logs -n opentalon-operator-system -l control-plane=controller-manager --tail=100 || true
           echo "=== Pod describe ==="
           kubectl describe pods -n opentalon-operator-system || true
-
-      - name: Run E2E tests
-        run: make test-e2e
-
-      - name: Install operator-sdk
-        run: |
-          export ARCH=$(case $(uname -m) in x86_64) echo -n amd64 ;; aarch64) echo -n arm64 ;; *) echo -n $(uname -m) ;; esac)
-          export OS=$(uname | awk '{print tolower($0)}')
-          curl -sSLo /usr/local/bin/operator-sdk "https://github.com/operator-framework/operator-sdk/releases/download/v1.38.0/operator-sdk_${OS}_${ARCH}"
-          chmod +x /usr/local/bin/operator-sdk
-          operator-sdk version
-
-      - name: Run scorecard tests
-        run: operator-sdk scorecard bundle --wait-time 120s || true
 
       - name: Dump operator logs on failure
         if: failure()

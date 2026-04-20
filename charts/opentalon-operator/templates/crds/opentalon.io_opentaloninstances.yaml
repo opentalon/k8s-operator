@@ -1,0 +1,678 @@
+{{- if .Values.crds.install }}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+    {{- if .Values.crds.keep }}
+    "helm.sh/resource-policy": keep
+    {{- end }}
+  name: opentaloninstances.opentalon.io
+  labels:
+    {{- include "opentalon-operator.labels" . | nindent 4 }}
+spec:
+  group: opentalon.io
+  names:
+    categories:
+      - opentalon
+    kind: OpenTalonInstance
+    listKind: OpenTalonInstanceList
+    plural: opentaloninstances
+    shortNames:
+      - oti
+    singular: opentaloninstance
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .status.phase
+          name: Phase
+          type: string
+        - jsonPath: .status.readyReplicas
+          name: Ready
+          type: integer
+        - jsonPath: .status.currentImage
+          name: Image
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: OpenTalonInstance is the Schema for the opentaloninstances API.
+          properties:
+            apiVersion:
+              description: APIVersion defines the versioned schema of this representation
+                of an object.
+              type: string
+            kind:
+              description: Kind is a string value representing the REST resource this
+                object represents.
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: OpenTalonInstanceSpec defines the desired state of an OpenTalonInstance.
+              properties:
+                additionalContainers:
+                  description: AdditionalContainers defines extra sidecar containers.
+                  items:
+                    description: A single application container that you want to run within a pod.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+                affinity:
+                  description: Affinity provides advanced scheduling constraints.
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                autoUpdate:
+                  description: AutoUpdate enables and configures automatic image updates.
+                  properties:
+                    allowPrerelease:
+                      description: AllowPrerelease permits updating to pre-release image tags.
+                      type: boolean
+                    enabled:
+                      description: Enabled enables the automatic update controller.
+                      type: boolean
+                    schedule:
+                      default: 0 2 * * *
+                      description: Schedule is the cron expression for update checks.
+                      type: string
+                  type: object
+                availability:
+                  description: Availability configures HPA and PDB settings.
+                  properties:
+                    horizontalPodAutoscaler:
+                      description: HorizontalPodAutoscaler configures a HPA.
+                      properties:
+                        cpuUtilization:
+                          description: CPUUtilization sets the target average CPU utilization percentage.
+                          format: int32
+                          type: integer
+                        enabled:
+                          description: Enabled enables HPA creation.
+                          type: boolean
+                        maxReplicas:
+                          default: 5
+                          description: MaxReplicas sets the maximum replica count.
+                          format: int32
+                          minimum: 1
+                          type: integer
+                        memoryUtilization:
+                          description: MemoryUtilization sets the target average memory utilization percentage.
+                          format: int32
+                          type: integer
+                        minReplicas:
+                          default: 1
+                          description: MinReplicas sets the minimum replica count.
+                          format: int32
+                          minimum: 1
+                          type: integer
+                      type: object
+                    podDisruptionBudget:
+                      description: PodDisruptionBudget configures a PDB.
+                      properties:
+                        enabled:
+                          description: Enabled enables PDB creation.
+                          type: boolean
+                        maxUnavailable:
+                          description: MaxUnavailable sets the maximum number of unavailable pods.
+                          format: int32
+                          type: integer
+                        minAvailable:
+                          description: MinAvailable sets the minimum number of available pods.
+                          format: int32
+                          type: integer
+                      type: object
+                  type: object
+                config:
+                  description: Config provides inline OpenTalon configuration sections.
+                  properties:
+                    channels:
+                      description: Channels configures communication channels.
+                      properties:
+                        console:
+                          description: Console enables the interactive console channel.
+                          properties:
+                            enabled:
+                              default: true
+                              description: Enabled enables the console channel.
+                              type: boolean
+                          type: object
+                        slack:
+                          description: Slack configures Slack bot integration.
+                          properties:
+                            appTokenSecret:
+                              description: AppTokenSecret references the Slack app-level token secret.
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.
+                                  type: string
+                                name:
+                                  description: Name of the referent secret.
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined.
+                                  type: boolean
+                              required:
+                                - key
+                              type: object
+                            enabled:
+                              default: true
+                              description: Enabled enables the Slack channel.
+                              type: boolean
+                            tokenSecret:
+                              description: TokenSecret references the Slack bot token secret.
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.
+                                  type: string
+                                name:
+                                  description: Name of the referent secret.
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined.
+                                  type: boolean
+                              required:
+                                - key
+                              type: object
+                          required:
+                            - tokenSecret
+                          type: object
+                        websocket:
+                          description: WebSocket configures a WebSocket server channel.
+                          properties:
+                            enabled:
+                              default: true
+                              description: Enabled enables the WebSocket channel.
+                              type: boolean
+                            port:
+                              default: 8081
+                              description: Port is the TCP port for the WebSocket server.
+                              format: int32
+                              maximum: 65535
+                              minimum: 1
+                              type: integer
+                          type: object
+                        webhook:
+                          description: Webhook configures inbound HTTP webhook ingestion.
+                          properties:
+                            enabled:
+                              default: true
+                              description: Enabled enables the webhook channel.
+                              type: boolean
+                            path:
+                              default: /webhook
+                              description: Path is the HTTP path for the webhook endpoint.
+                              type: string
+                            port:
+                              default: 8080
+                              description: Port is the TCP port for the webhook server.
+                              format: int32
+                              maximum: 65535
+                              minimum: 1
+                              type: integer
+                          type: object
+                      type: object
+                    extraConfig:
+                      description: ExtraConfig is additional raw YAML merged into config.yaml.
+                      type: string
+                    logging:
+                      description: Logging configures log output.
+                      properties:
+                        format:
+                          default: json
+                          description: Format sets the log output format.
+                          enum:
+                            - json
+                            - text
+                          type: string
+                        level:
+                          default: info
+                          description: Level sets the minimum log level.
+                          enum:
+                            - debug
+                            - info
+                            - warn
+                            - error
+                          type: string
+                      type: object
+                    models:
+                      description: Models lists LLM model configurations.
+                      items:
+                        description: ModelConfig configures an LLM provider and model.
+                        properties:
+                          apiKeySecret:
+                            description: APIKeySecret references the Secret key holding the API key.
+                            properties:
+                              key:
+                                description: The key of the secret to select from.
+                                type: string
+                              name:
+                                description: Name of the referent secret.
+                                type: string
+                              optional:
+                                description: Specify whether the Secret or its key must be defined.
+                                type: boolean
+                            required:
+                              - key
+                            type: object
+                          baseURL:
+                            description: BaseURL overrides the provider's default API endpoint.
+                            type: string
+                          contextWindow:
+                            description: ContextWindow sets the model's maximum context size in tokens.
+                            format: int64
+                            type: integer
+                          maxTokens:
+                            description: MaxTokens limits the maximum number of tokens in a response.
+                            type: integer
+                          name:
+                            description: Name is the model identifier used in routing rules.
+                            minLength: 1
+                            type: string
+                          provider:
+                            description: Provider is the LLM provider.
+                            minLength: 1
+                            type: string
+                        required:
+                          - name
+                          - provider
+                        type: object
+                      type: array
+                    plugins:
+                      description: Plugins lists gRPC plugin configurations.
+                      items:
+                        description: PluginConfig configures a gRPC plugin.
+                        properties:
+                          args:
+                            description: Args lists additional command-line arguments.
+                            items:
+                              type: string
+                            type: array
+                          env:
+                            description: Env sets environment variables for the plugin subprocess.
+                            items:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                            type: array
+                          name:
+                            description: Name is the unique plugin identifier.
+                            minLength: 1
+                            type: string
+                          source:
+                            description: Source is the plugin binary path or a GitHub URL.
+                            minLength: 1
+                            type: string
+                        required:
+                          - name
+                          - source
+                        type: object
+                      type: array
+                    routing:
+                      description: Routing configures model selection logic.
+                      properties:
+                        fallbacks:
+                          description: Fallbacks lists model names tried when the primary fails.
+                          items:
+                            type: string
+                          type: array
+                        primary:
+                          description: Primary is the name of the default model.
+                          type: string
+                      type: object
+                    state:
+                      description: State configures SQLite-backed session persistence.
+                      properties:
+                        idleSessionTTL:
+                          description: IdleSessionTTL is a Go duration after which idle sessions are pruned.
+                          type: string
+                        maxMessages:
+                          description: MaxMessages caps stored messages per session.
+                          type: integer
+                        path:
+                          default: /data/opentalon.db
+                          description: Path is the filesystem path for the SQLite database file.
+                          type: string
+                        summarize:
+                          description: Summarize enables automatic conversation summarization.
+                          type: boolean
+                      type: object
+                  type: object
+                configFrom:
+                  description: ConfigFrom references an existing ConfigMap containing config.yaml.
+                  properties:
+                    name:
+                      description: Name of the referent ConfigMap.
+                      type: string
+                  type: object
+                env:
+                  description: Env sets individual environment variables in the main container.
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+                envFrom:
+                  description: EnvFrom injects environment variables from ConfigMaps or Secrets.
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+                image:
+                  description: Image configuration.
+                  properties:
+                    digest:
+                      description: Digest overrides Tag with an exact image digest.
+                      type: string
+                    pullPolicy:
+                      default: IfNotPresent
+                      description: PullPolicy controls when the image is pulled.
+                      enum:
+                        - Always
+                        - Never
+                        - IfNotPresent
+                      type: string
+                    pullSecrets:
+                      description: PullSecrets lists image pull secrets.
+                      items:
+                        description: LocalObjectReference contains enough information to let you locate the referenced object inside the same namespace.
+                        properties:
+                          name:
+                            description: Name of the referent.
+                            type: string
+                        type: object
+                      type: array
+                    repository:
+                      default: ghcr.io/opentalon/opentalon
+                      description: Repository is the image repository.
+                      type: string
+                    tag:
+                      default: latest
+                      description: Tag is the image tag.
+                      type: string
+                  type: object
+                initContainers:
+                  description: InitContainers defines extra init containers.
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+                networking:
+                  description: Networking configures service exposure and ingress.
+                  properties:
+                    ingress:
+                      description: Ingress configures an optional Ingress resource.
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: Annotations sets annotations on the Ingress resource.
+                          type: object
+                        className:
+                          description: ClassName sets the IngressClass name.
+                          type: string
+                        enabled:
+                          description: Enabled enables Ingress creation.
+                          type: boolean
+                        host:
+                          description: Host is the hostname routed to the OpenTalon service.
+                          type: string
+                        tlsSecretName:
+                          description: TLSSecretName references a TLS Secret for HTTPS termination.
+                          type: string
+                      type: object
+                    networkPolicy:
+                      description: NetworkPolicy configures NetworkPolicy isolation.
+                      properties:
+                        egressRules:
+                          description: EgressRules are additional NetworkPolicy egress rules.
+                          items:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          type: array
+                        enabled:
+                          description: Enabled enables NetworkPolicy creation.
+                          type: boolean
+                        ingressRules:
+                          description: IngressRules are additional NetworkPolicy ingress rules.
+                          items:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          type: array
+                      type: object
+                    service:
+                      description: Service configures the Kubernetes Service resource.
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: Annotations sets annotations on the Service resource.
+                          type: object
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels sets additional labels on the Service resource.
+                          type: object
+                        port:
+                          default: 8080
+                          description: Port is the primary service port exposed.
+                          format: int32
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        type:
+                          default: ClusterIP
+                          description: Type sets the Service type.
+                          enum:
+                            - ClusterIP
+                            - NodePort
+                            - LoadBalancer
+                            - ExternalName
+                          type: string
+                      type: object
+                  type: object
+                nodeSelector:
+                  additionalProperties:
+                    type: string
+                  description: NodeSelector constrains pod scheduling.
+                  type: object
+                observability:
+                  description: Observability configures metrics and monitoring integration.
+                  properties:
+                    metrics:
+                      description: Metrics configures the Prometheus metrics endpoint.
+                      properties:
+                        enabled:
+                          description: Enabled enables the metrics HTTP endpoint.
+                          nullable: true
+                          type: boolean
+                        path:
+                          default: /metrics
+                          description: Path is the HTTP path at which metrics are served.
+                          type: string
+                        port:
+                          default: 9090
+                          description: Port is the port on which metrics are served.
+                          format: int32
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        serviceMonitor:
+                          description: ServiceMonitor configures a Prometheus Operator ServiceMonitor resource.
+                          properties:
+                            enabled:
+                              description: Enabled enables ServiceMonitor creation.
+                              type: boolean
+                            interval:
+                              default: 30s
+                              description: Interval sets the Prometheus scrape interval.
+                              type: string
+                            labels:
+                              additionalProperties:
+                                type: string
+                              description: Labels sets additional labels on the ServiceMonitor.
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+                replicas:
+                  default: 1
+                  description: Replicas sets the number of OpenTalon instance pods.
+                  format: int32
+                  minimum: 0
+                  type: integer
+                resources:
+                  description: Resources sets resource requests and limits for the main container.
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                security:
+                  description: Security configures security contexts.
+                  properties:
+                    containerSecurityContext:
+                      description: ContainerSecurityContext sets the container-level security context.
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    podSecurityContext:
+                      description: PodSecurityContext sets the pod-level security context.
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    readOnlyRootFilesystem:
+                      default: true
+                      description: ReadOnlyRootFilesystem makes the container root filesystem read-only.
+                      type: boolean
+                    runAsGroup:
+                      default: 1000
+                      description: RunAsGroup sets the primary GID.
+                      format: int64
+                      type: integer
+                    runAsUser:
+                      default: 1000
+                      description: RunAsUser sets the UID.
+                      format: int64
+                      type: integer
+                  type: object
+                serviceAccountName:
+                  description: ServiceAccountName sets a custom service account for the pod.
+                  type: string
+                storage:
+                  description: Storage configures data persistence.
+                  properties:
+                    persistence:
+                      description: Persistence configures the PersistentVolumeClaim mounted at /data.
+                      properties:
+                        accessModes:
+                          description: AccessModes sets the PVC access modes.
+                          items:
+                            type: string
+                          type: array
+                        enabled:
+                          default: true
+                          description: Enabled enables the PVC.
+                          type: boolean
+                        existingClaim:
+                          description: ExistingClaim references a pre-existing PVC.
+                          type: string
+                        size:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          default: 1Gi
+                          description: Size is the requested PVC storage capacity.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        storageClassName:
+                          description: StorageClassName sets the StorageClass for the PVC.
+                          type: string
+                      type: object
+                  type: object
+                tolerations:
+                  description: Tolerations allow the pod to tolerate node taints.
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
+              type: object
+            status:
+              description: OpenTalonInstanceStatus defines the observed state of an OpenTalonInstance.
+              properties:
+                conditions:
+                  description: Conditions tracks detailed reconciliation status for each managed resource.
+                  items:
+                    description: Condition contains details for one aspect of the current state.
+                    properties:
+                      lastTransitionTime:
+                        description: LastTransitionTime is the last time the condition transitioned.
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message is a human readable message indicating details.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: ObservedGeneration represents the .metadata.generation the condition was set based upon.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: Reason contains a programmatic identifier.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: Status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: Type of condition in CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+                currentImage:
+                  description: CurrentImage is the fully-qualified image reference currently running.
+                  type: string
+                lastUpdateTime:
+                  description: LastUpdateTime records when the status was last written.
+                  format: date-time
+                  type: string
+                managedResources:
+                  description: ManagedResources is the list of Kubernetes resource references owned by this operator.
+                  items:
+                    type: string
+                  type: array
+                observedGeneration:
+                  description: ObservedGeneration is the .metadata.generation last successfully reconciled.
+                  format: int64
+                  type: integer
+                phase:
+                  description: Phase is the current high-level lifecycle phase.
+                  type: string
+                readyReplicas:
+                  description: ReadyReplicas is the number of pods in the Ready state.
+                  format: int32
+                  type: integer
+              type: object
+          type: object
+      served: true
+      storage: true
+      subresources:
+        scale:
+          specReplicasPath: .spec.replicas
+          statusReplicasPath: .status.readyReplicas
+        status: {}
+{{- end }}
