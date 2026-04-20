@@ -21,8 +21,8 @@ builds:
 
 dockers:
   - image_templates:
-      - "ghcr.io/opentalon/opentalon-operator:{{ .Tag }}-amd64"
-      - "ghcr.io/opentalon/opentalon-operator:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/opentalon/opentalon-operator:{{ .Version }}-amd64"
+      - "ghcr.io/opentalon/opentalon-operator:{{ .Major }}.{{ .Minor }}-amd64"
       - "ghcr.io/opentalon/opentalon-operator:latest-amd64"
     use: buildx
     dockerfile: Dockerfile.goreleaser
@@ -34,8 +34,8 @@ dockers:
     goarch: amd64
 
   - image_templates:
-      - "ghcr.io/opentalon/opentalon-operator:{{ .Tag }}-arm64"
-      - "ghcr.io/opentalon/opentalon-operator:v{{ .Major }}.{{ .Minor }}-arm64"
+      - "ghcr.io/opentalon/opentalon-operator:{{ .Version }}-arm64"
+      - "ghcr.io/opentalon/opentalon-operator:{{ .Major }}.{{ .Minor }}-arm64"
       - "ghcr.io/opentalon/opentalon-operator:latest-arm64"
     use: buildx
     dockerfile: Dockerfile.goreleaser
@@ -47,15 +47,15 @@ dockers:
     goarch: arm64
 
 docker_manifests:
-  - name_template: "ghcr.io/opentalon/opentalon-operator:{{ .Tag }}"
+  - name_template: "ghcr.io/opentalon/opentalon-operator:{{ .Version }}"
     image_templates:
-      - "ghcr.io/opentalon/opentalon-operator:{{ .Tag }}-amd64"
-      - "ghcr.io/opentalon/opentalon-operator:{{ .Tag }}-arm64"
+      - "ghcr.io/opentalon/opentalon-operator:{{ .Version }}-amd64"
+      - "ghcr.io/opentalon/opentalon-operator:{{ .Version }}-arm64"
 
-  - name_template: "ghcr.io/opentalon/opentalon-operator:v{{ .Major }}.{{ .Minor }}"
+  - name_template: "ghcr.io/opentalon/opentalon-operator:{{ .Major }}.{{ .Minor }}"
     image_templates:
-      - "ghcr.io/opentalon/opentalon-operator:v{{ .Major }}.{{ .Minor }}-amd64"
-      - "ghcr.io/opentalon/opentalon-operator:v{{ .Major }}.{{ .Minor }}-arm64"
+      - "ghcr.io/opentalon/opentalon-operator:{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/opentalon/opentalon-operator:{{ .Major }}.{{ .Minor }}-arm64"
 
   - name_template: "ghcr.io/opentalon/opentalon-operator:latest"
     image_templates:
