@@ -136,6 +136,17 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 				port = 8081
 			}
 			sb.WriteString(fmt.Sprintf("    port: %d\n", port))
+			wsPath := spec.Channels.WebSocket.Path
+			if wsPath == "" {
+				wsPath = "/ws"
+			}
+			sb.WriteString(fmt.Sprintf("    path: %s\n", yamlString(wsPath)))
+			if len(spec.Channels.WebSocket.CORSOrigins) > 0 {
+				sb.WriteString("    cors_origins:\n")
+				for _, o := range spec.Channels.WebSocket.CORSOrigins {
+					sb.WriteString(fmt.Sprintf("      - %s\n", yamlString(o)))
+				}
+			}
 		}
 
 		sb.WriteString("\n")

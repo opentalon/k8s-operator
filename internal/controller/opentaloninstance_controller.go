@@ -246,6 +246,17 @@ func (r *OpenTalonInstanceReconciler) reconcileResources(
 		managedResources = append(managedResources, "Ingress/"+ingress.Name)
 	}
 
+	// 7a. WebSocket Ingress (optional) ─────────────────────────────────────────
+	if instance.Spec.Config.Channels != nil {
+		if ws := instance.Spec.Config.Channels.WebSocket; ws != nil && ws.Enabled && ws.Ingress != nil && ws.Ingress.Enabled {
+			wsIngress := resources.BuildWebSocketIngress(instance)
+			if err := r.createOrUpdateIngress(ctx, instance, wsIngress); err != nil {
+				return fmt.Errorf("websocket ingress: %w", err)
+			}
+			managedResources = append(managedResources, "Ingress/"+wsIngress.Name)
+		}
+	}
+
 	// 8. NetworkPolicy (optional) ──────────────────────────────────────────────
 	if instance.Spec.Networking.NetworkPolicy.Enabled {
 		np := resources.BuildNetworkPolicy(instance)

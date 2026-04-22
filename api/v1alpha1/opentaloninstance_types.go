@@ -119,6 +119,11 @@ type OpenTalonInstanceSpec struct {
 	// +optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
 
+	// PodAnnotations sets additional annotations on the pod template.
+	// Useful for Prometheus scrape annotations or other integrations.
+	// +optional
+	PodAnnotations map[string]string `json:"podAnnotations,omitempty"`
+
 	// ServiceAccountName sets a custom service account for the pod.
 	// When empty the operator creates and manages a dedicated service account.
 	// +optional
@@ -306,6 +311,21 @@ type WebSocketChannelConfig struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port int32 `json:"port,omitempty"`
+
+	// Path is the HTTP path at which the WebSocket endpoint is served.
+	// +optional
+	// +kubebuilder:default="/ws"
+	Path string `json:"path,omitempty"`
+
+	// CORSOrigins lists the allowed CORS origins for WebSocket connections.
+	// An empty list allows all origins (dev mode).
+	// +optional
+	CORSOrigins []string `json:"corsOrigins,omitempty"`
+
+	// Ingress configures a dedicated Ingress for the WebSocket endpoint.
+	// When omitted the WebSocket is only reachable cluster-internally.
+	// +optional
+	Ingress *IngressSpec `json:"ingress,omitempty"`
 }
 
 // PluginConfig configures a gRPC plugin loaded by OpenTalon.

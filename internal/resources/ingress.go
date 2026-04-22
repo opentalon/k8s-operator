@@ -90,3 +90,82 @@ func BuildIngress(instance *v1alpha1.OpenTalonInstance) *networkingv1.Ingress {
 
 	return ingress
 }
+
+// WebSocketIngressName returns the name of the dedicated WebSocket Ingress.
+func WebSocketIngressName(instance *v1alpha1.OpenTalonInstance) string {
+	return ResourceName(instance) + "-ws"
+}
+
+// BuildWebSocketIngress creates a dedicated Ingress for the WebSocket channel.
+// It merges default WebSocket-friendly annotations (long proxy timeouts) with
+// user-supplied annotations from the channel's ingress spec.
+func BuildWebSocketIngress(instance *v1alpha1.OpenTalonInstance) *networkingv1.Ingress {
+	ws := instance.Spec.Config.Channels.WebSocket
+	wsIngress := ws.Ingress
+
+	wsPort := ws.Port
+	if wsPort == 0 {
+		wsPort = 8081
+	}
+	wsPath := ws.Path
+	if wsPath == "" {
+		wsPath = "/ws"
+	}
+
+	// Default WebSocket annotations for nginx; user annotations can override.
+	annotations := map[string]string{
+		"nginx.ingress.kubernetes.io/proxy-read-timeout":  "3600",
+		"nginx.ingress.kubernetes.io/proxy-send-timeout":  "3600",
+	}
+	for k, v := range wsIngress.Annotations {
+		annotations[k] = v
+	}
+
+	pathType := networkingv1.PathTypeExact
+
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        WebSocketIngressName(instance),
+			Namespace:   instance.Namespace,
+			Labels:      Labels(instance),
+			Annotations: annotations,
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: wsIngress.ClassName,
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: wsIngress.Host,
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path:     wsPath,
+									PathType: &pathType,
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: ResourceName(instance),
+											Port: networkingv1.ServiceBackendPort{
+												Number: wsPort,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if wsIngress.TLSSecretName != "" {
+		ingress.Spec.TLS = []networkingv1.IngressTLS{
+			{
+				Hosts:      []string{wsIngress.Host},
+				SecretName: wsIngress.TLSSecretName,
+			},
+		}
+	}
+
+	return ingress
+}
