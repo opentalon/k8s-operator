@@ -73,7 +73,12 @@ func BuildStatefulSet(instance *v1alpha1.OpenTalonInstance, configHash string) *
 		ConfigHashAnnotation: configHash,
 	}
 
-	// Merge user-supplied pod annotations if any are set on the instance.
+	// Merge user-supplied pod annotations from spec.podAnnotations.
+	for k, v := range instance.Spec.PodAnnotations {
+		podAnnotations[k] = v
+	}
+
+	// Also merge annotations from the instance metadata (legacy behaviour).
 	for k, v := range instance.Annotations {
 		if k != ConfigHashAnnotation {
 			podAnnotations[k] = v
