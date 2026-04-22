@@ -284,8 +284,11 @@ func buildReadinessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
 	}
 }
 
-// httpProbePort returns the first available HTTP server port (webhook or metrics).
-// Returns 0 if no HTTP port is configured.
+// httpProbePort returns the first available HTTP server port that serves health
+// endpoints (/healthz, /readyz). Only channel ports (webhook, websocket) are
+// considered because the metrics endpoint does not serve health routes.
+// Returns 0 if no suitable port is configured, causing the caller to fall back
+// to an exec probe.
 func httpProbePort(instance *v1alpha1.OpenTalonInstance) int32 {
 	if instance.Spec.Config.Channels != nil {
 		if wh := instance.Spec.Config.Channels.Webhook; wh != nil && wh.Enabled {
@@ -294,13 +297,6 @@ func httpProbePort(instance *v1alpha1.OpenTalonInstance) int32 {
 			}
 			return 8080
 		}
-	}
-	if instance.Spec.Observability.Metrics.Enabled != nil && *instance.Spec.Observability.Metrics.Enabled {
-		p := instance.Spec.Observability.Metrics.Port
-		if p > 0 {
-			return p
-		}
-		return 9090
 	}
 	return 0
 }
