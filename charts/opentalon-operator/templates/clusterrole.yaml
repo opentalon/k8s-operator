@@ -6,60 +6,54 @@ metadata:
   labels:
     {{- include "opentalon-operator.labels" . | nindent 4 }}
 rules:
-  # OpenTalonInstance resources
-  - apiGroups: ["opentalon.io"]
-    resources: ["opentaloninstances"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["opentalon.io"]
-    resources: ["opentaloninstances/status"]
-    verbs: ["get", "update", "patch"]
-  - apiGroups: ["opentalon.io"]
-    resources: ["opentaloninstances/finalizers"]
-    verbs: ["update"]
+  # Core resources
+  - apiGroups: [""]
+    resources: ["configmaps", "events", "persistentvolumeclaims", "secrets", "serviceaccounts", "services"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 
   # StatefulSets
   - apiGroups: ["apps"]
     resources: ["statefulsets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # Core resources
-  - apiGroups: [""]
-    resources:
-      - services
-      - configmaps
-      - secrets
-      - persistentvolumeclaims
-      - serviceaccounts
-      - events
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # RBAC resources
-  - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["roles", "rolebindings"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # Networking resources
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["ingresses", "networkpolicies"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # Policy resources
-  - apiGroups: ["policy"]
-    resources: ["poddisruptionbudgets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 
   # Autoscaling resources
   - apiGroups: ["autoscaling"]
     resources: ["horizontalpodautoscalers"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # Prometheus Operator ServiceMonitor (CRD — optional)
-  - apiGroups: ["monitoring.coreos.com"]
-    resources: ["servicemonitors"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 
   # Leader election
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+  # Prometheus Operator ServiceMonitor (CRD — optional)
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+  # Networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+  # OpenTalonInstance resources
+  - apiGroups: ["opentalon.io"]
+    resources: ["opentaloninstances"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  - apiGroups: ["opentalon.io"]
+    resources: ["opentaloninstances/finalizers"]
+    verbs: ["update"]
+  - apiGroups: ["opentalon.io"]
+    resources: ["opentaloninstances/status"]
+    verbs: ["get", "patch", "update"]
+
+  # Policy resources
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+  # RBAC resources
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings", "roles"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 {{- end }}
