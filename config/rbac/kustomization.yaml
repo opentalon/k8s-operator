@@ -5,3 +5,12 @@ resources:
   - role.yaml
   - role_binding.yaml
   - service_account.yaml
+
+patches:
+  - target:
+      kind: ClusterRole
+      name: manager-role
+    patch: |
+      - op: replace
+        path: /metadata/name
+        value: opentalon-operator-manager-role
