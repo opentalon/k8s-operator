@@ -92,14 +92,17 @@ jobs:
           OWNER="${GITHUB_REPOSITORY_OWNER,,}"
           echo "name=${{ env.REGISTRY }}/${OWNER}/opentalon-operator" >> $GITHUB_OUTPUT
 
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
       - name: Sign container images
         run: |
           IMAGE="${{ steps.docker-image.outputs.name }}"
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
+          VERSION="${{ steps.version.outputs.version }}"
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
-          TAGS=("latest" "${{ github.ref_name }}" "v${MAJOR}.${MINOR}")
+          TAGS=("latest" "${VERSION}" "${MAJOR}.${MINOR}")
 
           for tag in "${TAGS[@]}"; do
             echo "Signing ${IMAGE}:${tag}..."
@@ -114,7 +117,7 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ steps.docker-image.outputs.name }}:${{ github.ref_name }}
+          image: ${{ steps.docker-image.outputs.name }}:${{ steps.version.outputs.version }}
           format: spdx-json
           output-file: sbom.spdx.json
           upload-release-assets: false
@@ -122,7 +125,7 @@ jobs:
       - name: Attest SBOM
         run: |
           IMAGE="${{ steps.docker-image.outputs.name }}"
-          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${{ github.ref_name }}" --format '{{json .Manifest}}' | jq -r '.digest')
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${{ steps.version.outputs.version }}" --format '{{json .Manifest}}' | jq -r '.digest')
           cosign attest --yes --predicate sbom.spdx.json --type spdxjson \
             "${IMAGE}@${DIGEST}"
 
