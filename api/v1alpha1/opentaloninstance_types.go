@@ -328,25 +328,55 @@ type WebSocketChannelConfig struct {
 	Ingress *IngressSpec `json:"ingress,omitempty"`
 }
 
-// PluginConfig configures a gRPC plugin loaded by OpenTalon.
+// PluginConfig configures a plugin's Kubernetes-level resources (ingress, service port).
+// The plugin's runtime configuration (source, github/ref, dial_timeout, config map)
+// belongs in the OpenTalon config.yaml — either via configFrom (external ConfigMap)
+// or via spec.config.extraConfig.
 type PluginConfig struct {
-	// Name is the unique plugin identifier.
+	// Name is the unique plugin identifier (e.g. "weaviate", "mcp").
+	// Must match the plugin name used in the OpenTalon config.yaml.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// Source is the plugin binary path or a GitHub URL (e.g. github.com/org/plugin@v1.2.3).
+	// Ingress configures a dedicated Ingress for the plugin's HTTP endpoint.
+	// The plugin must expose an HTTP server (e.g. via http_addr in its config).
+	// +optional
+	Ingress *PluginIngressSpec `json:"ingress,omitempty"`
+}
+
+// PluginIngressSpec configures an Ingress for a plugin's HTTP endpoint.
+type PluginIngressSpec struct {
+	// Enabled enables Ingress creation for this plugin.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Host is the hostname routed to the plugin.
+	// +optional
+	Host string `json:"host,omitempty"`
+
+	// Path is the HTTP path prefix routed to the plugin (e.g. "/weaviate").
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	Source string `json:"source"`
+	Path string `json:"path"`
 
-	// Args lists additional command-line arguments passed to the plugin process.
-	// +optional
-	Args []string `json:"args,omitempty"`
+	// Port is the container port the plugin's HTTP server listens on.
+	// This must match the port configured in the plugin's config (e.g. http_addr: ":8082").
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int32 `json:"port"`
 
-	// Env sets environment variables for the plugin subprocess.
+	// TLSSecretName references a TLS Secret for HTTPS termination.
 	// +optional
-	Env []corev1.EnvVar `json:"env,omitempty"`
+	TLSSecretName string `json:"tlsSecretName,omitempty"`
+
+	// ClassName sets the IngressClass name.
+	// +optional
+	ClassName *string `json:"className,omitempty"`
+
+	// Annotations sets annotations on the Ingress resource.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // StateConfig configures SQLite-backed session persistence.

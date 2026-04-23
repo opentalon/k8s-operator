@@ -15,6 +15,8 @@
 package resources
 
 import (
+	"fmt"
+
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -163,6 +165,75 @@ func BuildWebSocketIngress(instance *v1alpha1.OpenTalonInstance) *networkingv1.I
 			{
 				Hosts:      []string{wsIngress.Host},
 				SecretName: wsIngress.TLSSecretName,
+			},
+		}
+	}
+
+	return ingress
+}
+
+// PluginIngressName returns the name of the dedicated Ingress for a plugin.
+func PluginIngressName(instance *v1alpha1.OpenTalonInstance, pluginName string) string {
+	return fmt.Sprintf("%s-plugin-%s", ResourceName(instance), pluginName)
+}
+
+// BuildPluginIngress creates a dedicated Ingress for a plugin's HTTP endpoint.
+// It rewrites the path prefix so the plugin receives requests at its root.
+func BuildPluginIngress(instance *v1alpha1.OpenTalonInstance, plugin v1alpha1.PluginConfig) *networkingv1.Ingress {
+	pi := plugin.Ingress
+
+	annotations := map[string]string{
+		"nginx.ingress.kubernetes.io/rewrite-target": "/$2",
+	}
+	for k, v := range pi.Annotations {
+		annotations[k] = v
+	}
+
+	// Match /path and /path/... — the ($|/) boundary plus (.*) capture group
+	// feeds the rewrite-target above.
+	pathPattern := fmt.Sprintf("%s(/|$)(.*)", pi.Path)
+	pathType := networkingv1.PathTypeImplementationSpecific
+
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        PluginIngressName(instance, plugin.Name),
+			Namespace:   instance.Namespace,
+			Labels:      Labels(instance),
+			Annotations: annotations,
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: pi.ClassName,
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: pi.Host,
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path:     pathPattern,
+									PathType: &pathType,
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: ResourceName(instance),
+											Port: networkingv1.ServiceBackendPort{
+												Number: pi.Port,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if pi.TLSSecretName != "" {
+		ingress.Spec.TLS = []networkingv1.IngressTLS{
+			{
+				Hosts:      []string{pi.Host},
+				SecretName: pi.TLSSecretName,
 			},
 		}
 	}
