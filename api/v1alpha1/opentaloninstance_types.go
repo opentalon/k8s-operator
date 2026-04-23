@@ -177,9 +177,9 @@ type ConfigSpec struct {
 	// +optional
 	Channels *ChannelsConfig `json:"channels,omitempty"`
 
-	// Plugins lists gRPC plugin configurations.
+	// Plugins configures Kubernetes-level resources for plugins, keyed by plugin name.
 	// +optional
-	Plugins []PluginConfig `json:"plugins,omitempty"`
+	Plugins map[string]PluginConfig `json:"plugins,omitempty"`
 
 	// State configures SQLite-backed session persistence.
 	// +optional
@@ -333,12 +333,6 @@ type WebSocketChannelConfig struct {
 // belongs in the OpenTalon config.yaml — either via configFrom (external ConfigMap)
 // or via spec.config.extraConfig.
 type PluginConfig struct {
-	// Name is the unique plugin identifier (e.g. "weaviate", "mcp").
-	// Must match the plugin name used in the OpenTalon config.yaml.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
-
 	// Ingress configures a dedicated Ingress for the plugin's HTTP endpoint.
 	// The plugin must expose an HTTP server (e.g. via http_addr in its config).
 	// +optional

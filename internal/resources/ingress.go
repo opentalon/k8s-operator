@@ -179,7 +179,7 @@ func PluginIngressName(instance *v1alpha1.OpenTalonInstance, pluginName string) 
 
 // BuildPluginIngress creates a dedicated Ingress for a plugin's HTTP endpoint.
 // It rewrites the path prefix so the plugin receives requests at its root.
-func BuildPluginIngress(instance *v1alpha1.OpenTalonInstance, plugin v1alpha1.PluginConfig) *networkingv1.Ingress {
+func BuildPluginIngress(instance *v1alpha1.OpenTalonInstance, name string, plugin v1alpha1.PluginConfig) *networkingv1.Ingress {
 	pi := plugin.Ingress
 
 	annotations := map[string]string{
@@ -196,7 +196,7 @@ func BuildPluginIngress(instance *v1alpha1.OpenTalonInstance, plugin v1alpha1.Pl
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        PluginIngressName(instance, plugin.Name),
+			Name:        PluginIngressName(instance, name),
 			Namespace:   instance.Namespace,
 			Labels:      Labels(instance),
 			Annotations: annotations,

@@ -16,9 +16,8 @@ func TestPluginIngress(t *testing.T) {
 		},
 		Spec: v1alpha1.OpenTalonInstanceSpec{
 			Config: v1alpha1.ConfigSpec{
-				Plugins: []v1alpha1.PluginConfig{
-					{
-						Name: "weaviate",
+				Plugins: map[string]v1alpha1.PluginConfig{
+					"weaviate": {
 						Ingress: &v1alpha1.PluginIngressSpec{
 							Enabled:       true,
 							Host:          "opentalon.timly.com",
@@ -42,7 +41,7 @@ func TestPluginIngress(t *testing.T) {
 	}
 
 	// Test BuildPluginIngress
-	ingress := resources.BuildPluginIngress(instance, instance.Spec.Config.Plugins[0])
+	ingress := resources.BuildPluginIngress(instance, "weaviate", instance.Spec.Config.Plugins["weaviate"])
 	if ingress.Name != "opentalon-plugin-weaviate" {
 		t.Errorf("ingress name: expected opentalon-plugin-weaviate, got %s", ingress.Name)
 	}
@@ -121,8 +120,8 @@ func TestPluginIngress_NoIngress(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 		Spec: v1alpha1.OpenTalonInstanceSpec{
 			Config: v1alpha1.ConfigSpec{
-				Plugins: []v1alpha1.PluginConfig{
-					{Name: "mcp"},
+				Plugins: map[string]v1alpha1.PluginConfig{
+					"mcp": {},
 				},
 			},
 		},
