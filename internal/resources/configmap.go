@@ -153,26 +153,10 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 	}
 
 	// ── Plugins ───────────────────────────────────────────────────────────────
-	if len(spec.Plugins) > 0 {
-		sb.WriteString("plugins:\n")
-		for _, p := range spec.Plugins {
-			sb.WriteString(fmt.Sprintf("  - name: %s\n", yamlString(p.Name)))
-			sb.WriteString(fmt.Sprintf("    source: %s\n", yamlString(p.Source)))
-			if len(p.Args) > 0 {
-				sb.WriteString("    args:\n")
-				for _, a := range p.Args {
-					sb.WriteString(fmt.Sprintf("      - %s\n", yamlString(a)))
-				}
-			}
-			if len(p.Env) > 0 {
-				sb.WriteString("    env:\n")
-				for _, e := range p.Env {
-					sb.WriteString(fmt.Sprintf("      %s: %s\n", e.Name, yamlString(e.Value)))
-				}
-			}
-		}
-		sb.WriteString("\n")
-	}
+	// Plugin runtime configuration (source, github/ref, config) is not rendered
+	// here — it belongs in the external ConfigMap (configFrom) or extraConfig.
+	// The CRD PluginConfig only manages Kubernetes-level resources (ingress,
+	// service port).
 
 	// ── State ─────────────────────────────────────────────────────────────────
 	if spec.State != nil {

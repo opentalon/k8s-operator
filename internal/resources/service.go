@@ -15,6 +15,8 @@
 package resources
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -114,6 +116,18 @@ func buildServicePorts(instance *v1alpha1.OpenTalonInstance) []corev1.ServicePor
 			TargetPort: intstr.FromString("metrics"),
 			Protocol:   corev1.ProtocolTCP,
 		})
+	}
+
+	// Plugin HTTP ports.
+	for _, p := range instance.Spec.Config.Plugins {
+		if p.Ingress != nil && p.Ingress.Enabled && p.Ingress.Port > 0 {
+			ports = append(ports, corev1.ServicePort{
+				Name:       fmt.Sprintf("plugin-%s", p.Name),
+				Port:       p.Ingress.Port,
+				TargetPort: intstr.FromString(fmt.Sprintf("plugin-%s", p.Name)),
+				Protocol:   corev1.ProtocolTCP,
+			})
+		}
 	}
 
 	// If no channel ports were added, expose the primary service port as a
