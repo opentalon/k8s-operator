@@ -248,11 +248,11 @@ func (r *OpenTalonInstanceReconciler) reconcileResources(
 	}
 
 	// 7b. Plugin Ingress (optional) ────────────────────────────────────────────
-	for _, p := range instance.Spec.Config.Plugins {
+	for name, p := range instance.Spec.Config.Plugins {
 		if p.Ingress != nil && p.Ingress.Enabled {
-			pluginIngress := resources.BuildPluginIngress(instance, p)
+			pluginIngress := resources.BuildPluginIngress(instance, name, p)
 			if err := r.createOrUpdateIngress(ctx, instance, pluginIngress); err != nil {
-				return fmt.Errorf("plugin %s ingress: %w", p.Name, err)
+				return fmt.Errorf("plugin %s ingress: %w", name, err)
 			}
 			managedResources = append(managedResources, "Ingress/"+pluginIngress.Name)
 		}

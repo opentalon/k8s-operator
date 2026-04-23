@@ -15,8 +15,6 @@
 package resources
 
 import (
-	"fmt"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -338,12 +336,9 @@ func buildContainerPorts(instance *v1alpha1.OpenTalonInstance) []corev1.Containe
 	}
 
 	// Plugin HTTP ports.
-	for _, plugin := range instance.Spec.Config.Plugins {
+	for name, plugin := range instance.Spec.Config.Plugins {
 		if plugin.Ingress != nil && plugin.Ingress.Enabled && plugin.Ingress.Port > 0 {
-			portName := fmt.Sprintf("plugin-%s", plugin.Name)
-			if len(portName) > 15 {
-				portName = portName[:15]
-			}
+			portName := pluginPortName(name)
 			ports = append(ports, corev1.ContainerPort{
 				Name:          portName,
 				ContainerPort: plugin.Ingress.Port,

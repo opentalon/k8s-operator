@@ -3019,8 +3019,7 @@ spec:
                       type: object
                     type: array
                   plugins:
-                    description: Plugins lists gRPC plugin configurations.
-                    items:
+                    additionalProperties:
                       description: |-
                         PluginConfig configures a plugin's Kubernetes-level resources (ingress, service port).
                         The plugin's runtime configuration (source, github/ref, dial_timeout, config map)
@@ -3068,16 +3067,10 @@ spec:
                           - path
                           - port
                           type: object
-                        name:
-                          description: |-
-                            Name is the unique plugin identifier (e.g. "weaviate", "mcp").
-                            Must match the plugin name used in the OpenTalon config.yaml.
-                          minLength: 1
-                          type: string
-                      required:
-                      - name
                       type: object
-                    type: array
+                    description: Plugins configures Kubernetes-level resources for
+                      plugins, keyed by plugin name.
+                    type: object
                   routing:
                     description: Routing configures model selection and fallback behaviour.
                     properties:

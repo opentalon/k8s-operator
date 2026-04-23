@@ -119,12 +119,13 @@ func buildServicePorts(instance *v1alpha1.OpenTalonInstance) []corev1.ServicePor
 	}
 
 	// Plugin HTTP ports.
-	for _, p := range instance.Spec.Config.Plugins {
+	for name, p := range instance.Spec.Config.Plugins {
 		if p.Ingress != nil && p.Ingress.Enabled && p.Ingress.Port > 0 {
+			portName := pluginPortName(name)
 			ports = append(ports, corev1.ServicePort{
-				Name:       fmt.Sprintf("plugin-%s", p.Name),
+				Name:       portName,
 				Port:       p.Ingress.Port,
-				TargetPort: intstr.FromString(fmt.Sprintf("plugin-%s", p.Name)),
+				TargetPort: intstr.FromString(portName),
 				Protocol:   corev1.ProtocolTCP,
 			})
 		}
@@ -142,4 +143,13 @@ func buildServicePorts(instance *v1alpha1.OpenTalonInstance) []corev1.ServicePor
 	}
 
 	return ports
+}
+
+// pluginPortName returns a Kubernetes-safe port name for a plugin (max 15 chars).
+func pluginPortName(name string) string {
+	pn := fmt.Sprintf("plugin-%s", name)
+	if len(pn) > 15 {
+		pn = pn[:15]
+	}
+	return pn
 }
