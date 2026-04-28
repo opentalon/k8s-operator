@@ -134,6 +134,14 @@ type OpenTalonInstanceSpec struct {
 	// third-party services; opentalon-chrome then captures the session cookies via CDP.
 	// +optional
 	ChromeLogin *ChromeLoginSpec `json:"chromeLogin,omitempty"`
+
+	// AdditionalVolumes defines extra volumes to add to the pod.
+	// +optional
+	AdditionalVolumes []corev1.Volume `json:"additionalVolumes,omitempty"`
+
+	// AdditionalVolumeMounts defines extra volume mounts to add to the main container.
+	// +optional
+	AdditionalVolumeMounts []corev1.VolumeMount `json:"additionalVolumeMounts,omitempty"`
 }
 
 // ImageSpec configures the OpenTalon container image.

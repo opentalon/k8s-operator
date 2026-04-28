@@ -59,21 +59,21 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 	if len(spec.Models) > 0 {
 		sb.WriteString("models:\n")
 		for _, m := range spec.Models {
-			sb.WriteString(fmt.Sprintf("  - name: %s\n", yamlString(m.Name)))
-			sb.WriteString(fmt.Sprintf("    provider: %s\n", yamlString(m.Provider)))
+			fmt.Fprintf(&sb, "  - name: %s\n", yamlString(m.Name))
+			fmt.Fprintf(&sb, "    provider: %s\n", yamlString(m.Provider))
 			if m.BaseURL != "" {
-				sb.WriteString(fmt.Sprintf("    base_url: %s\n", yamlString(m.BaseURL)))
+				fmt.Fprintf(&sb, "    base_url: %s\n", yamlString(m.BaseURL))
 			}
 			if m.ContextWindow > 0 {
-				sb.WriteString(fmt.Sprintf("    context_window: %d\n", m.ContextWindow))
+				fmt.Fprintf(&sb,"    context_window: %d\n", m.ContextWindow)
 			}
 			if m.MaxTokens > 0 {
-				sb.WriteString(fmt.Sprintf("    max_tokens: %d\n", m.MaxTokens))
+				fmt.Fprintf(&sb,"    max_tokens: %d\n", m.MaxTokens)
 			}
 			// API key is injected via env var; write the env var reference.
 			if m.APIKeySecret != nil {
 				envVar := apiKeyEnvVar(m.Provider)
-				sb.WriteString(fmt.Sprintf("    api_key_env: %s\n", envVar))
+				fmt.Fprintf(&sb,"    api_key_env: %s\n", envVar)
 			}
 		}
 		sb.WriteString("\n")
@@ -83,12 +83,12 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 	if spec.Routing != nil {
 		sb.WriteString("routing:\n")
 		if spec.Routing.Primary != "" {
-			sb.WriteString(fmt.Sprintf("  primary: %s\n", yamlString(spec.Routing.Primary)))
+			fmt.Fprintf(&sb,"  primary: %s\n", yamlString(spec.Routing.Primary))
 		}
 		if len(spec.Routing.Fallbacks) > 0 {
 			sb.WriteString("  fallbacks:\n")
 			for _, f := range spec.Routing.Fallbacks {
-				sb.WriteString(fmt.Sprintf("    - %s\n", yamlString(f)))
+				fmt.Fprintf(&sb,"    - %s\n", yamlString(f))
 			}
 		}
 		sb.WriteString("\n")
@@ -100,12 +100,12 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 
 		if spec.Channels.Console != nil {
 			sb.WriteString("  console:\n")
-			sb.WriteString(fmt.Sprintf("    enabled: %v\n", spec.Channels.Console.Enabled))
+			fmt.Fprintf(&sb,"    enabled: %v\n", spec.Channels.Console.Enabled)
 		}
 
 		if spec.Channels.Slack != nil {
 			sb.WriteString("  slack:\n")
-			sb.WriteString(fmt.Sprintf("    enabled: %v\n", spec.Channels.Slack.Enabled))
+			fmt.Fprintf(&sb,"    enabled: %v\n", spec.Channels.Slack.Enabled)
 			// Token is mounted via env; reference the env var name OpenTalon expects.
 			sb.WriteString("    token_env: SLACK_BOT_TOKEN\n")
 			if spec.Channels.Slack.AppTokenSecret != nil {
@@ -115,36 +115,36 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 
 		if spec.Channels.Webhook != nil {
 			sb.WriteString("  webhook:\n")
-			sb.WriteString(fmt.Sprintf("    enabled: %v\n", spec.Channels.Webhook.Enabled))
+			fmt.Fprintf(&sb,"    enabled: %v\n", spec.Channels.Webhook.Enabled)
 			port := spec.Channels.Webhook.Port
 			if port == 0 {
 				port = 8080
 			}
-			sb.WriteString(fmt.Sprintf("    port: %d\n", port))
+			fmt.Fprintf(&sb,"    port: %d\n", port)
 			path := spec.Channels.Webhook.Path
 			if path == "" {
 				path = "/webhook"
 			}
-			sb.WriteString(fmt.Sprintf("    path: %s\n", yamlString(path)))
+			fmt.Fprintf(&sb,"    path: %s\n", yamlString(path))
 		}
 
 		if spec.Channels.WebSocket != nil {
 			sb.WriteString("  websocket:\n")
-			sb.WriteString(fmt.Sprintf("    enabled: %v\n", spec.Channels.WebSocket.Enabled))
+			fmt.Fprintf(&sb,"    enabled: %v\n", spec.Channels.WebSocket.Enabled)
 			port := spec.Channels.WebSocket.Port
 			if port == 0 {
 				port = 8081
 			}
-			sb.WriteString(fmt.Sprintf("    port: %d\n", port))
+			fmt.Fprintf(&sb,"    port: %d\n", port)
 			wsPath := spec.Channels.WebSocket.Path
 			if wsPath == "" {
 				wsPath = "/ws"
 			}
-			sb.WriteString(fmt.Sprintf("    path: %s\n", yamlString(wsPath)))
+			fmt.Fprintf(&sb,"    path: %s\n", yamlString(wsPath))
 			if len(spec.Channels.WebSocket.CORSOrigins) > 0 {
 				sb.WriteString("    cors_origins:\n")
 				for _, o := range spec.Channels.WebSocket.CORSOrigins {
-					sb.WriteString(fmt.Sprintf("      - %s\n", yamlString(o)))
+					fmt.Fprintf(&sb,"      - %s\n", yamlString(o))
 				}
 			}
 		}
@@ -165,12 +165,12 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 		if path == "" {
 			path = "/data/opentalon.db"
 		}
-		sb.WriteString(fmt.Sprintf("  path: %s\n", yamlString(path)))
+		fmt.Fprintf(&sb,"  path: %s\n", yamlString(path))
 		if spec.State.MaxMessages != nil {
-			sb.WriteString(fmt.Sprintf("  max_messages: %d\n", *spec.State.MaxMessages))
+			fmt.Fprintf(&sb,"  max_messages: %d\n", *spec.State.MaxMessages)
 		}
 		if spec.State.IdleSessionTTL != "" {
-			sb.WriteString(fmt.Sprintf("  idle_session_ttl: %s\n", yamlString(spec.State.IdleSessionTTL)))
+			fmt.Fprintf(&sb,"  idle_session_ttl: %s\n", yamlString(spec.State.IdleSessionTTL))
 		}
 		if spec.State.Summarize {
 			sb.WriteString("  summarize: true\n")
@@ -189,12 +189,12 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 		if level == "" {
 			level = "info"
 		}
-		sb.WriteString(fmt.Sprintf("  level: %s\n", level))
+		fmt.Fprintf(&sb,"  level: %s\n", level)
 		format := spec.Logging.Format
 		if format == "" {
 			format = "json"
 		}
-		sb.WriteString(fmt.Sprintf("  format: %s\n", format))
+		fmt.Fprintf(&sb,"  format: %s\n", format)
 		sb.WriteString("\n")
 	} else {
 		sb.WriteString("logging:\n")
