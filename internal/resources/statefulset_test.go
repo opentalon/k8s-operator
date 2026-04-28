@@ -149,6 +149,53 @@ func TestBuildStatefulSet_ConfigHashAnnotationEmpty(t *testing.T) {
 	}
 }
 
+func TestBuildStatefulSet_AdditionalVolumesAndMounts(t *testing.T) {
+	inst := newStsInstance("bot", "default")
+	inst.Spec.AdditionalVolumes = []corev1.Volume{
+		{
+			Name: "extra-secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "my-secret"},
+			},
+		},
+	}
+	inst.Spec.AdditionalVolumeMounts = []corev1.VolumeMount{
+		{
+			Name:      "extra-secret",
+			MountPath: "/etc/extra-secret",
+			ReadOnly:  true,
+		},
+	}
+	sts := BuildStatefulSet(inst, "")
+
+	// Check volume is present.
+	foundVol := false
+	for _, v := range sts.Spec.Template.Spec.Volumes {
+		if v.Name == "extra-secret" && v.Secret != nil && v.Secret.SecretName == "my-secret" {
+			foundVol = true
+			break
+		}
+	}
+	if !foundVol {
+		t.Error("expected additional volume 'extra-secret' in pod volumes")
+	}
+
+	// Check volume mount is present on the main container.
+	if len(sts.Spec.Template.Spec.Containers) == 0 {
+		t.Fatal("no containers in pod template")
+	}
+	foundMount := false
+	for _, vm := range sts.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if vm.Name == "extra-secret" && vm.MountPath == "/etc/extra-secret" {
+			foundMount = true
+			break
+		}
+	}
+	if !foundMount {
+		t.Error("expected additional volume mount 'extra-secret' on main container")
+	}
+}
+
 func TestBuildStatefulSet_PVCDisabled_EmptyDir(t *testing.T) {
 	inst := newStsInstance("bot", "default")
 	// Persistence disabled (default zero value = false).

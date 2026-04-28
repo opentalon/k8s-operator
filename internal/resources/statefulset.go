@@ -161,6 +161,9 @@ func buildMainContainer(
 		},
 	}
 
+	// Append user-defined additional volume mounts.
+	volumeMounts = append(volumeMounts, instance.Spec.AdditionalVolumeMounts...)
+
 	container := corev1.Container{
 		Name:            "opentalon",
 		Image:           imageRef,
@@ -394,6 +397,9 @@ func buildVolumes(instance *v1alpha1.OpenTalonInstance) []corev1.Volume {
 	}
 	// When persistence is enabled and no existingClaim is set, the volume is
 	// provided by the VolumeClaimTemplate on the StatefulSet.
+
+	// Append user-defined additional volumes.
+	volumes = append(volumes, instance.Spec.AdditionalVolumes...)
 
 	return volumes
 }
