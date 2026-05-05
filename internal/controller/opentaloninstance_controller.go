@@ -645,7 +645,11 @@ func (r *OpenTalonInstanceReconciler) createOrUpdatePDB(
 	}
 	existing.Spec = desired.Spec
 	existing.Labels = desired.Labels
-	return r.Update(ctx, existing) // reconcile-guard:allow
+	err = r.Update(ctx, existing) // reconcile-guard:allow
+	if apierrors.IsConflict(err) {
+		return nil // stale version; next reconcile will retry
+	}
+	return err
 }
 
 func (r *OpenTalonInstanceReconciler) createOrUpdateHPA(
@@ -666,7 +670,11 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateHPA(
 	}
 	existing.Spec = desired.Spec
 	existing.Labels = desired.Labels
-	return r.Update(ctx, existing) // reconcile-guard:allow
+	err = r.Update(ctx, existing) // reconcile-guard:allow
+	if apierrors.IsConflict(err) {
+		return nil // stale version; next reconcile will retry
+	}
+	return err
 }
 
 // ── ChromeLogin helpers ───────────────────────────────────────────────────────
