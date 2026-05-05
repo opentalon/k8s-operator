@@ -202,6 +202,29 @@ func renderConfigYAML(instance *v1alpha1.OpenTalonInstance) string {
 		sb.WriteString("  format: json\n\n")
 	}
 
+	// ── Health ────────────────────────────────────────────────────────────────
+	// Always render the health block so the gRPC probe server binds to the
+	// port the operator configured in the container/probe specs.
+	{
+		p := instance.Spec.Observability.Health.Port
+		if p == 0 {
+			p = 8086
+		}
+		sb.WriteString("health:\n")
+		fmt.Fprintf(&sb, "  addr: \":%d\"\n\n", p)
+	}
+
+	// ── Metrics ──────────────────────────────────────────────────────────────
+	if instance.Spec.Observability.Metrics.Enabled != nil && *instance.Spec.Observability.Metrics.Enabled {
+		sb.WriteString("metrics:\n")
+		sb.WriteString("  enabled: true\n")
+		p := instance.Spec.Observability.Metrics.Port
+		if p == 0 {
+			p = 9090
+		}
+		fmt.Fprintf(&sb, "  addr: \":%d\"\n\n", p)
+	}
+
 	// ── Extra config (raw append) ─────────────────────────────────────────────
 	if spec.ExtraConfig != "" {
 		sb.WriteString("# Extra configuration supplied via spec.config.extraConfig\n")

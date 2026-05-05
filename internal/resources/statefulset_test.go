@@ -236,6 +236,72 @@ func TestBuildStatefulSet_PVCEnabled_VolumeClaimTemplate(t *testing.T) {
 	}
 }
 
+func TestBuildStatefulSet_GRPCHealthProbes(t *testing.T) {
+	inst := newStsInstance("bot", "default")
+	sts := BuildStatefulSet(inst, "")
+
+	if len(sts.Spec.Template.Spec.Containers) == 0 {
+		t.Fatal("no containers in pod template")
+	}
+	c := sts.Spec.Template.Spec.Containers[0]
+
+	// Liveness probe: gRPC on default port 8086, no service name.
+	if c.LivenessProbe == nil || c.LivenessProbe.GRPC == nil {
+		t.Fatal("expected gRPC liveness probe")
+	}
+	if c.LivenessProbe.GRPC.Port != 8086 {
+		t.Errorf("liveness grpc port = %d, want 8086", c.LivenessProbe.GRPC.Port)
+	}
+
+	// Readiness probe: gRPC on default port 8086, service "opentalon".
+	if c.ReadinessProbe == nil || c.ReadinessProbe.GRPC == nil {
+		t.Fatal("expected gRPC readiness probe")
+	}
+	if c.ReadinessProbe.GRPC.Port != 8086 {
+		t.Errorf("readiness grpc port = %d, want 8086", c.ReadinessProbe.GRPC.Port)
+	}
+	if c.ReadinessProbe.GRPC.Service == nil || *c.ReadinessProbe.GRPC.Service != "opentalon" {
+		t.Errorf("readiness grpc service = %v, want \"opentalon\"", c.ReadinessProbe.GRPC.Service)
+	}
+
+	// Startup probe: gRPC, default 600s timeout → failureThreshold=120.
+	if c.StartupProbe == nil || c.StartupProbe.GRPC == nil {
+		t.Fatal("expected gRPC startup probe")
+	}
+	if c.StartupProbe.GRPC.Port != 8086 {
+		t.Errorf("startup grpc port = %d, want 8086", c.StartupProbe.GRPC.Port)
+	}
+	if c.StartupProbe.FailureThreshold != 120 {
+		t.Errorf("startup failureThreshold = %d, want 120", c.StartupProbe.FailureThreshold)
+	}
+}
+
+func TestBuildStatefulSet_CustomHealthPort(t *testing.T) {
+	inst := newStsInstance("bot", "default")
+	inst.Spec.Observability.Health.Port = 9999
+	inst.Spec.Observability.Health.StartupTimeoutSeconds = 300
+	sts := BuildStatefulSet(inst, "")
+
+	c := sts.Spec.Template.Spec.Containers[0]
+	if c.LivenessProbe.GRPC.Port != 9999 {
+		t.Errorf("liveness grpc port = %d, want 9999", c.LivenessProbe.GRPC.Port)
+	}
+	if c.StartupProbe.FailureThreshold != 60 {
+		t.Errorf("startup failureThreshold = %d, want 60 (300/5)", c.StartupProbe.FailureThreshold)
+	}
+
+	// Check health port in container ports.
+	found := false
+	for _, p := range c.Ports {
+		if p.Name == "health" && p.ContainerPort == 9999 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected health container port 9999")
+	}
+}
+
 func TestBuildStatefulSet_ConfigArg(t *testing.T) {
 	inst := newStsInstance("bot", "default")
 	sts := BuildStatefulSet(inst, "")
