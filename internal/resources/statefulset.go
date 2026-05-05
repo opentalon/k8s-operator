@@ -19,7 +19,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	v1alpha1 "github.com/opentalon/k8s-operator/api/v1alpha1"
 )
@@ -214,9 +213,10 @@ func buildMainContainer(
 		container.Env = append(container.Env, ChromeLoginEnvVars(instance)...)
 	}
 
-	// Add liveness and readiness probes based on which channel is enabled.
+	// Add gRPC health probes (liveness, readiness, startup).
 	container.LivenessProbe = buildLivenessProbe(instance)
 	container.ReadinessProbe = buildReadinessProbe(instance)
+	container.StartupProbe = buildStartupProbe(instance)
 
 	return container
 }
@@ -232,57 +232,21 @@ func buildContainers(instance *v1alpha1.OpenTalonInstance, main corev1.Container
 	return append(containers, instance.Spec.AdditionalContainers...)
 }
 
-// buildLivenessProbe returns an appropriate liveness probe.
-// When a webhook or websocket port is available, an HTTP GET is used.
-// Otherwise a process-exists exec probe is used.
-func buildLivenessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
-	if port := httpProbePort(instance); port > 0 {
-		return &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/healthz",
-					Port: intstr.FromInt32(port),
-				},
-			},
-			InitialDelaySeconds: 15,
-			PeriodSeconds:       20,
-			FailureThreshold:    3,
-			TimeoutSeconds:      5,
-		}
+// healthPort returns the gRPC health server port from the spec, defaulting to 8086.
+func healthPort(instance *v1alpha1.OpenTalonInstance) int32 {
+	if p := instance.Spec.Observability.Health.Port; p > 0 {
+		return p
 	}
-	return &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			Exec: &corev1.ExecAction{
-				Command: []string{"/bin/sh", "-c", "test -f /data/opentalon.db || true"},
-			},
-		},
-		InitialDelaySeconds: 10,
-		PeriodSeconds:       30,
-		FailureThreshold:    3,
-		TimeoutSeconds:      5,
-	}
+	return 8086
 }
 
-// buildReadinessProbe returns an appropriate readiness probe.
-func buildReadinessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
-	if port := httpProbePort(instance); port > 0 {
-		return &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/readyz",
-					Port: intstr.FromInt32(port),
-				},
-			},
-			InitialDelaySeconds: 5,
-			PeriodSeconds:       10,
-			FailureThreshold:    3,
-			TimeoutSeconds:      5,
-		}
-	}
+// buildLivenessProbe returns a gRPC liveness probe checking the empty-string
+// service (always SERVING while the process is alive).
+func buildLivenessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
 	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			Exec: &corev1.ExecAction{
-				Command: []string{"/bin/sh", "-c", "test -f /data/opentalon.db || true"},
+			GRPC: &corev1.GRPCAction{
+				Port: healthPort(instance),
 			},
 		},
 		InitialDelaySeconds: 5,
@@ -292,21 +256,51 @@ func buildReadinessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
 	}
 }
 
-// httpProbePort returns the first available HTTP server port that serves health
-// endpoints (/healthz, /readyz). Only channel ports (webhook, websocket) are
-// considered because the metrics endpoint does not serve health routes.
-// Returns 0 if no suitable port is configured, causing the caller to fall back
-// to an exec probe.
-func httpProbePort(instance *v1alpha1.OpenTalonInstance) int32 {
-	if instance.Spec.Config.Channels != nil {
-		if wh := instance.Spec.Config.Channels.Webhook; wh != nil && wh.Enabled {
-			if wh.Port > 0 {
-				return wh.Port
-			}
-			return 8080
-		}
+// buildReadinessProbe returns a gRPC readiness probe checking the "opentalon"
+// service (SERVING only when all plugins and channels are loaded).
+func buildReadinessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
+	svc := "opentalon"
+	initialDelay := instance.Spec.Observability.Health.ReadinessInitialDelaySeconds
+	if initialDelay <= 0 {
+		initialDelay = 10
 	}
-	return 0
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			GRPC: &corev1.GRPCAction{
+				Port:    healthPort(instance),
+				Service: &svc,
+			},
+		},
+		InitialDelaySeconds: initialDelay,
+		PeriodSeconds:       5,
+		FailureThreshold:    3,
+		TimeoutSeconds:      5,
+	}
+}
+
+// buildStartupProbe returns a gRPC startup probe that gives plugins time to
+// compile and load. The timeout is configurable via spec.observability.health.startupTimeoutSeconds.
+func buildStartupProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
+	svc := "opentalon"
+	timeout := instance.Spec.Observability.Health.StartupTimeoutSeconds
+	if timeout <= 0 {
+		timeout = 600 // 10 min default
+	}
+	threshold := timeout / 5
+	if threshold < 1 {
+		threshold = 1
+	}
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			GRPC: &corev1.GRPCAction{
+				Port:    healthPort(instance),
+				Service: &svc,
+			},
+		},
+		FailureThreshold: threshold,
+		PeriodSeconds:    5,
+		TimeoutSeconds:   5,
+	}
 }
 
 // buildContainerPorts produces the list of named container ports based on the spec.
@@ -337,6 +331,13 @@ func buildContainerPorts(instance *v1alpha1.OpenTalonInstance) []corev1.Containe
 		}
 		ports = append(ports, corev1.ContainerPort{Name: "metrics", ContainerPort: p, Protocol: corev1.ProtocolTCP})
 	}
+
+	// gRPC health probe port (always exposed).
+	ports = append(ports, corev1.ContainerPort{
+		Name:          "health",
+		ContainerPort: healthPort(instance),
+		Protocol:      corev1.ProtocolTCP,
+	})
 
 	// Plugin HTTP ports – expose whenever a port is declared, even without ingress.
 	for name, plugin := range instance.Spec.Config.Plugins {

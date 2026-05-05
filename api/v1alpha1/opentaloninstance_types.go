@@ -559,6 +559,37 @@ type ObservabilitySpec struct {
 	// Metrics configures the Prometheus metrics endpoint.
 	// +optional
 	Metrics MetricsSpec `json:"metrics,omitempty"`
+
+	// Health configures the gRPC health probe server for Kubernetes
+	// liveness, readiness, and startup probes.
+	// +optional
+	Health HealthSpec `json:"health,omitempty"`
+}
+
+// HealthSpec configures the gRPC health probe server.
+type HealthSpec struct {
+	// Port is the port on which the gRPC health service listens.
+	// +optional
+	// +kubebuilder:default=8086
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int32 `json:"port,omitempty"`
+
+	// StartupTimeoutSeconds is the maximum time to wait for all plugins
+	// and channels to load before Kubernetes kills the pod. Set this based
+	// on how many plugins compile at startup (e.g. 5 plugins x 7min = 2100s).
+	// +optional
+	// +kubebuilder:default=600
+	// +kubebuilder:validation:Minimum=10
+	StartupTimeoutSeconds int32 `json:"startupTimeoutSeconds,omitempty"`
+
+	// ReadinessInitialDelaySeconds is the number of seconds after the startup
+	// probe passes before the readiness probe begins. Only relevant after the
+	// startup probe succeeds.
+	// +optional
+	// +kubebuilder:default=10
+	// +kubebuilder:validation:Minimum=0
+	ReadinessInitialDelaySeconds int32 `json:"readinessInitialDelaySeconds,omitempty"`
 }
 
 // MetricsSpec configures the Prometheus metrics endpoint.

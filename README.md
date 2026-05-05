@@ -218,6 +218,31 @@ spec:
           prometheus: kube-prometheus
 ```
 
+### Health Probes
+
+The operator configures gRPC health probes automatically using the standard [gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md). No HTTP endpoints or extra sidecars required.
+
+| Probe | Service | Behaviour |
+|-------|---------|-----------|
+| **Liveness** | `""` (empty) | Always `SERVING` while the process runs |
+| **Readiness** | `"opentalon"` | `SERVING` only after all plugins and channels are loaded |
+| **Startup** | `"opentalon"` | Same as readiness, with a longer timeout for plugin compilation |
+
+```yaml
+spec:
+  observability:
+    health:
+      port: 8086                        # gRPC health server port (default: 8086)
+      startupTimeoutSeconds: 2100       # max wait for plugins to compile (default: 600)
+      readinessInitialDelaySeconds: 10  # delay before readiness probe starts after startup passes (default: 10)
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `port` | `8086` | gRPC health server port |
+| `startupTimeoutSeconds` | `600` | Max time for plugins to compile before K8s kills the pod |
+| `readinessInitialDelaySeconds` | `10` | Seconds after startup probe passes before readiness checks begin |
+
 ### High Availability
 
 ```yaml

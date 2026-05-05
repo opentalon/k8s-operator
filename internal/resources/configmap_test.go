@@ -204,3 +204,41 @@ func TestBuildConfigMap_DefaultStateAndLogging(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildConfigMap_HealthDefaultPort(t *testing.T) {
+	inst := newConfigMapInstance("talon-11", "default")
+	cm := BuildConfigMap(inst)
+	yaml := cm.Data["config.yaml"]
+
+	for _, want := range []string{"health:", `addr: ":8086"`} {
+		if !strings.Contains(yaml, want) {
+			t.Errorf("config.yaml missing %q; got:\n%s", want, yaml)
+		}
+	}
+}
+
+func TestBuildConfigMap_HealthCustomPort(t *testing.T) {
+	inst := newConfigMapInstance("talon-12", "default")
+	inst.Spec.Observability.Health.Port = 9999
+	cm := BuildConfigMap(inst)
+	yaml := cm.Data["config.yaml"]
+
+	if !strings.Contains(yaml, `addr: ":9999"`) {
+		t.Errorf("config.yaml missing custom health port; got:\n%s", yaml)
+	}
+}
+
+func TestBuildConfigMap_MetricsRendered(t *testing.T) {
+	inst := newConfigMapInstance("talon-13", "default")
+	enabled := true
+	inst.Spec.Observability.Metrics.Enabled = &enabled
+	inst.Spec.Observability.Metrics.Port = 2112
+	cm := BuildConfigMap(inst)
+	yaml := cm.Data["config.yaml"]
+
+	for _, want := range []string{"metrics:", "enabled: true", `addr: ":2112"`} {
+		if !strings.Contains(yaml, want) {
+			t.Errorf("config.yaml missing %q; got:\n%s", want, yaml)
+		}
+	}
+}
