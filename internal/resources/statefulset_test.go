@@ -263,6 +263,9 @@ func TestBuildStatefulSet_GRPCHealthProbes(t *testing.T) {
 	if c.ReadinessProbe.GRPC.Service == nil || *c.ReadinessProbe.GRPC.Service != "opentalon" {
 		t.Errorf("readiness grpc service = %v, want \"opentalon\"", c.ReadinessProbe.GRPC.Service)
 	}
+	if c.ReadinessProbe.InitialDelaySeconds != 10 {
+		t.Errorf("readiness initialDelaySeconds = %d, want 10", c.ReadinessProbe.InitialDelaySeconds)
+	}
 
 	// Startup probe: gRPC, default 600s timeout → failureThreshold=120.
 	if c.StartupProbe == nil || c.StartupProbe.GRPC == nil {
@@ -280,6 +283,7 @@ func TestBuildStatefulSet_CustomHealthPort(t *testing.T) {
 	inst := newStsInstance("bot", "default")
 	inst.Spec.Observability.Health.Port = 9999
 	inst.Spec.Observability.Health.StartupTimeoutSeconds = 300
+	inst.Spec.Observability.Health.ReadinessInitialDelaySeconds = 30
 	sts := BuildStatefulSet(inst, "")
 
 	c := sts.Spec.Template.Spec.Containers[0]
@@ -288,6 +292,9 @@ func TestBuildStatefulSet_CustomHealthPort(t *testing.T) {
 	}
 	if c.StartupProbe.FailureThreshold != 60 {
 		t.Errorf("startup failureThreshold = %d, want 60 (300/5)", c.StartupProbe.FailureThreshold)
+	}
+	if c.ReadinessProbe.InitialDelaySeconds != 30 {
+		t.Errorf("readiness initialDelaySeconds = %d, want 30", c.ReadinessProbe.InitialDelaySeconds)
 	}
 
 	// Check health port in container ports.

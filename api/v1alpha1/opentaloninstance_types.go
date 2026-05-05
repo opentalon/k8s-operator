@@ -582,6 +582,14 @@ type HealthSpec struct {
 	// +kubebuilder:default=600
 	// +kubebuilder:validation:Minimum=10
 	StartupTimeoutSeconds int32 `json:"startupTimeoutSeconds,omitempty"`
+
+	// ReadinessInitialDelaySeconds is the number of seconds after the startup
+	// probe passes before the readiness probe begins. Only relevant after the
+	// startup probe succeeds.
+	// +optional
+	// +kubebuilder:default=10
+	// +kubebuilder:validation:Minimum=0
+	ReadinessInitialDelaySeconds int32 `json:"readinessInitialDelaySeconds,omitempty"`
 }
 
 // MetricsSpec configures the Prometheus metrics endpoint.

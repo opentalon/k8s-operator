@@ -260,6 +260,10 @@ func buildLivenessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
 // service (SERVING only when all plugins and channels are loaded).
 func buildReadinessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
 	svc := "opentalon"
+	initialDelay := instance.Spec.Observability.Health.ReadinessInitialDelaySeconds
+	if initialDelay <= 0 {
+		initialDelay = 10
+	}
 	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			GRPC: &corev1.GRPCAction{
@@ -267,7 +271,7 @@ func buildReadinessProbe(instance *v1alpha1.OpenTalonInstance) *corev1.Probe {
 				Service: &svc,
 			},
 		},
-		InitialDelaySeconds: 10,
+		InitialDelaySeconds: initialDelay,
 		PeriodSeconds:       5,
 		FailureThreshold:    3,
 		TimeoutSeconds:      5,
