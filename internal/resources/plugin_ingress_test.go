@@ -135,3 +135,46 @@ func TestPluginIngress_NoIngress(t *testing.T) {
 		}
 	}
 }
+
+func TestPluginPort_WithoutIngressEnabled(t *testing.T) {
+	instance := &v1alpha1.OpenTalonInstance{
+		ObjectMeta: metav1.ObjectMeta{Name: "opentalon", Namespace: "opentalon"},
+		Spec: v1alpha1.OpenTalonInstanceSpec{
+			Config: v1alpha1.ConfigSpec{
+				Plugins: map[string]v1alpha1.PluginConfig{
+					"api": {
+						Ingress: &v1alpha1.PluginIngressSpec{
+							Enabled: false,
+							Port:    8080,
+							Path:    "/api",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Service should have plugin port even when ingress is not enabled.
+	svc := resources.BuildService(instance)
+	foundPort := false
+	for _, p := range svc.Spec.Ports {
+		if p.Name == "plugin-api" && p.Port == 8080 {
+			foundPort = true
+		}
+	}
+	if !foundPort {
+		t.Error("service should have plugin-api port 8080 even when ingress.enabled is false")
+	}
+
+	// StatefulSet should have container port too.
+	sts := resources.BuildStatefulSet(instance, "hash")
+	foundContainerPort := false
+	for _, p := range sts.Spec.Template.Spec.Containers[0].Ports {
+		if p.Name == "plugin-api" && p.ContainerPort == 8080 {
+			foundContainerPort = true
+		}
+	}
+	if !foundContainerPort {
+		t.Error("statefulset should have plugin-api container port 8080 even when ingress.enabled is false")
+	}
+}

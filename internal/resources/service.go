@@ -118,9 +118,9 @@ func buildServicePorts(instance *v1alpha1.OpenTalonInstance) []corev1.ServicePor
 		})
 	}
 
-	// Plugin HTTP ports.
+	// Plugin HTTP ports – expose whenever a port is declared, even without ingress.
 	for name, p := range instance.Spec.Config.Plugins {
-		if p.Ingress != nil && p.Ingress.Enabled && p.Ingress.Port > 0 {
+		if p.Ingress != nil && p.Ingress.Port > 0 {
 			portName := pluginPortName(name)
 			ports = append(ports, corev1.ServicePort{
 				Name:       portName,

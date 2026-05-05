@@ -338,9 +338,9 @@ func buildContainerPorts(instance *v1alpha1.OpenTalonInstance) []corev1.Containe
 		ports = append(ports, corev1.ContainerPort{Name: "metrics", ContainerPort: p, Protocol: corev1.ProtocolTCP})
 	}
 
-	// Plugin HTTP ports.
+	// Plugin HTTP ports – expose whenever a port is declared, even without ingress.
 	for name, plugin := range instance.Spec.Config.Plugins {
-		if plugin.Ingress != nil && plugin.Ingress.Enabled && plugin.Ingress.Port > 0 {
+		if plugin.Ingress != nil && plugin.Ingress.Port > 0 {
 			portName := pluginPortName(name)
 			ports = append(ports, corev1.ContainerPort{
 				Name:          portName,
