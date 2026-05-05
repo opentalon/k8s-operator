@@ -7035,6 +7035,38 @@ spec:
               observability:
                 description: Observability configures metrics endpoints and ServiceMonitors.
                 properties:
+                  health:
+                    description: |-
+                      Health configures the gRPC health probe server for Kubernetes
+                      liveness, readiness, and startup probes.
+                    properties:
+                      port:
+                        default: 8086
+                        description: Port is the port on which the gRPC health service
+                          listens.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1
+                        type: integer
+                      readinessInitialDelaySeconds:
+                        default: 10
+                        description: |-
+                          ReadinessInitialDelaySeconds is the number of seconds after the startup
+                          probe passes before the readiness probe begins. Only relevant after the
+                          startup probe succeeds.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      startupTimeoutSeconds:
+                        default: 600
+                        description: |-
+                          StartupTimeoutSeconds is the maximum time to wait for all plugins
+                          and channels to load before Kubernetes kills the pod. Set this based
+                          on how many plugins compile at startup (e.g. 5 plugins x 7min = 2100s).
+                        format: int32
+                        minimum: 10
+                        type: integer
+                    type: object
                   metrics:
                     description: Metrics configures the Prometheus metrics endpoint.
                     properties:
