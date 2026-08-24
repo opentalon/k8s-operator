@@ -807,25 +807,54 @@ func statefulSetNeedsUpdate(existing, desired *appsv1.StatefulSet) bool {
 	if existingHash != desiredHash {
 		return true
 	}
-	// Compare the main container's image, resources, and env — these can change
+	// Compare every container's image, resources, and env — these can change
 	// independently of the image tag or config hash (e.g. a resources-only or
-	// env-only spec edit) and must still trigger a rollout.
-	if len(existing.Spec.Template.Spec.Containers) > 0 &&
-		len(desired.Spec.Template.Spec.Containers) > 0 {
-		existingContainer := existing.Spec.Template.Spec.Containers[0]
-		desiredContainer := desired.Spec.Template.Spec.Containers[0]
-		if existingContainer.Image != desiredContainer.Image {
+	// env-only spec edit, or adding/removing the chrome-login sidecar / an
+	// AdditionalContainers entry) and must still trigger a rollout.
+	existingContainers := existing.Spec.Template.Spec.Containers
+	desiredContainers := desired.Spec.Template.Spec.Containers
+	if len(existingContainers) != len(desiredContainers) {
+		return true
+	}
+	for i := range desiredContainers {
+		if containerNeedsUpdate(existingContainers[i], desiredContainers[i]) {
 			return true
 		}
-		if !equality.Semantic.DeepEqual(existingContainer.Resources, desiredContainer.Resources) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(existingContainer.Env, desiredContainer.Env) {
-			return true
-		}
-		if !equality.Semantic.DeepEqual(existingContainer.EnvFrom, desiredContainer.EnvFrom) {
-			return true
-		}
+	}
+	return false
+}
+
+// containerNeedsUpdate compares the fields of a single container that the
+// operator manages directly. Resources are compared field-by-field rather
+// than as a whole: if the CR doesn't set Requests (or Limits), a cluster
+// LimitRange or admission webhook may inject a value into the stored
+// StatefulSet that the freshly-built desired container never has, which
+// would otherwise cause a spurious diff — and thus a StatefulSet Update —
+// on every single reconcile.
+func containerNeedsUpdate(existingContainer, desiredContainer corev1.Container) bool {
+	if existingContainer.Image != desiredContainer.Image {
+		return true
+	}
+	if resourcesNeedUpdate(existingContainer.Resources, desiredContainer.Resources) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(existingContainer.Env, desiredContainer.Env) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(existingContainer.EnvFrom, desiredContainer.EnvFrom) {
+		return true
+	}
+	return false
+}
+
+// resourcesNeedUpdate compares Limits and Requests independently, and only
+// when desired actually sets that field. See containerNeedsUpdate for why.
+func resourcesNeedUpdate(existing, desired corev1.ResourceRequirements) bool {
+	if len(desired.Limits) > 0 && !equality.Semantic.DeepEqual(existing.Limits, desired.Limits) {
+		return true
+	}
+	if len(desired.Requests) > 0 && !equality.Semantic.DeepEqual(existing.Requests, desired.Requests) {
+		return true
 	}
 	return false
 }
