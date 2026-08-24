@@ -20,6 +20,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	apiresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -30,6 +31,12 @@ import (
 // makeSts is a test helper that builds a minimal StatefulSet with the given
 // replica count, container image, and config hash annotation.
 func makeSts(replicas int32, image, configHash string) *appsv1.StatefulSet {
+	return makeStsWithContainer(replicas, configHash, corev1.Container{Image: image})
+}
+
+// makeStsWithContainer is like makeSts but takes a full container spec, for
+// tests that need to vary resources/env rather than just the image.
+func makeStsWithContainer(replicas int32, configHash string, container corev1.Container) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &replicas,
@@ -40,9 +47,7 @@ func makeSts(replicas int32, image, configHash string) *appsv1.StatefulSet {
 					},
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{Image: image},
-					},
+					Containers: []corev1.Container{container},
 				},
 			},
 		},
@@ -159,6 +164,40 @@ func TestStatefulSetNeedsUpdate(t *testing.T) {
 		desired := makeSts(replicas, "img:v1", "hash2")
 		if !statefulSetNeedsUpdate(existing, desired) {
 			t.Error("statefulSetNeedsUpdate() = false, want true for hash change")
+		}
+	})
+
+	t.Run("resources-only change returns true", func(t *testing.T) {
+		replicas := int32(1)
+		existing := makeStsWithContainer(replicas, "hash1", corev1.Container{
+			Image: "img:v1",
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{corev1.ResourceMemory: apiresource.MustParse("256Mi")},
+			},
+		})
+		desired := makeStsWithContainer(replicas, "hash1", corev1.Container{
+			Image: "img:v1",
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{corev1.ResourceMemory: apiresource.MustParse("512Mi")},
+			},
+		})
+		if !statefulSetNeedsUpdate(existing, desired) {
+			t.Error("statefulSetNeedsUpdate() = false, want true for resources-only change")
+		}
+	})
+
+	t.Run("env-only change returns true", func(t *testing.T) {
+		replicas := int32(1)
+		existing := makeStsWithContainer(replicas, "hash1", corev1.Container{
+			Image: "img:v1",
+			Env:   []corev1.EnvVar{{Name: "LOG_LEVEL", Value: "info"}},
+		})
+		desired := makeStsWithContainer(replicas, "hash1", corev1.Container{
+			Image: "img:v1",
+			Env:   []corev1.EnvVar{{Name: "LOG_LEVEL", Value: "debug"}},
+		})
+		if !statefulSetNeedsUpdate(existing, desired) {
+			t.Error("statefulSetNeedsUpdate() = false, want true for env-only change")
 		}
 	})
 }

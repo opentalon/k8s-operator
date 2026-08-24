@@ -807,11 +807,23 @@ func statefulSetNeedsUpdate(existing, desired *appsv1.StatefulSet) bool {
 	if existingHash != desiredHash {
 		return true
 	}
-	// Compare container images.
+	// Compare the main container's image, resources, and env — these can change
+	// independently of the image tag or config hash (e.g. a resources-only or
+	// env-only spec edit) and must still trigger a rollout.
 	if len(existing.Spec.Template.Spec.Containers) > 0 &&
 		len(desired.Spec.Template.Spec.Containers) > 0 {
-		if existing.Spec.Template.Spec.Containers[0].Image !=
-			desired.Spec.Template.Spec.Containers[0].Image {
+		existingContainer := existing.Spec.Template.Spec.Containers[0]
+		desiredContainer := desired.Spec.Template.Spec.Containers[0]
+		if existingContainer.Image != desiredContainer.Image {
+			return true
+		}
+		if !equality.Semantic.DeepEqual(existingContainer.Resources, desiredContainer.Resources) {
+			return true
+		}
+		if !equality.Semantic.DeepEqual(existingContainer.Env, desiredContainer.Env) {
+			return true
+		}
+		if !equality.Semantic.DeepEqual(existingContainer.EnvFrom, desiredContainer.EnvFrom) {
 			return true
 		}
 	}
