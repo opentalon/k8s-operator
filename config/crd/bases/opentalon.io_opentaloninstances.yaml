@@ -4870,17 +4870,33 @@ spec:
                               description: Host is the hostname routed to the plugin.
                               type: string
                             path:
-                              description: Path is the HTTP path prefix routed to
-                                the plugin (e.g. "/weaviate").
+                              description: |-
+                                Path is the HTTP path prefix routed to the plugin (e.g. "/weaviate").
+                                Ignored when protocol is GRPC, where routing is host-based and the
+                                plugin receives the full gRPC method path unrewritten.
                               type: string
                             port:
                               description: |-
-                                Port is the container port the plugin's HTTP server listens on.
-                                This must match the port configured in the plugin's config (e.g. http_addr: ":8082").
+                                Port is the container port the plugin's server listens on. For HTTP
+                                this must match the port configured in the plugin's config (e.g.
+                                http_addr: ":8082"); for GRPC it must match the plugin's grpc_port.
                               format: int32
                               maximum: 65535
                               minimum: 1
                               type: integer
+                            protocol:
+                              default: HTTP
+                              description: |-
+                                Protocol selects how the Ingress routes to the plugin. HTTP (default)
+                                path-prefixes and rewrites to root, matching a plugin's own http_addr
+                                server. GRPC skips path rewriting (gRPC method paths are routed
+                                whole) and defaults the nginx.ingress.kubernetes.io/backend-protocol
+                                annotation to "GRPC" — for a plugin's external PluginService.Execute
+                                gateway (opentalon core's grpc_port), not its own HTTP server.
+                              enum:
+                              - HTTP
+                              - GRPC
+                              type: string
                             tlsSecretName:
                               description: TLSSecretName references a TLS Secret for
                                 HTTPS termination.

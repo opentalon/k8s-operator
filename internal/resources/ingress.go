@@ -177,10 +177,17 @@ func PluginIngressName(instance *v1alpha1.OpenTalonInstance, pluginName string) 
 	return fmt.Sprintf("%s-plugin-%s", ResourceName(instance), pluginName)
 }
 
-// BuildPluginIngress creates a dedicated Ingress for a plugin's HTTP endpoint.
-// It rewrites the path prefix so the plugin receives requests at its root.
+// BuildPluginIngress creates a dedicated Ingress for a plugin's endpoint.
+// For HTTP (default) it rewrites the path prefix so the plugin receives
+// requests at its root. For GRPC it routes the host unrewritten — gRPC
+// method paths (e.g. /opentalon.plugin.v1.PluginService/Execute) are not
+// prefix segments the rewrite-target scheme below can safely apply to.
 func BuildPluginIngress(instance *v1alpha1.OpenTalonInstance, name string, plugin v1alpha1.PluginConfig) *networkingv1.Ingress {
 	pi := plugin.Ingress
+
+	if pi.Protocol == "GRPC" {
+		return buildGRPCPluginIngress(instance, name, pi)
+	}
 
 	annotations := map[string]string{
 		"nginx.ingress.kubernetes.io/rewrite-target": "/$2",
@@ -211,6 +218,72 @@ func BuildPluginIngress(instance *v1alpha1.OpenTalonInstance, name string, plugi
 							Paths: []networkingv1.HTTPIngressPath{
 								{
 									Path:     pathPattern,
+									PathType: &pathType,
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: ResourceName(instance),
+											Port: networkingv1.ServiceBackendPort{
+												Number: pi.Port,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if pi.TLSSecretName != "" {
+		ingress.Spec.TLS = []networkingv1.IngressTLS{
+			{
+				Hosts:      []string{pi.Host},
+				SecretName: pi.TLSSecretName,
+			},
+		}
+	}
+
+	return ingress
+}
+
+// buildGRPCPluginIngress routes the whole host to the plugin's port with no
+// path rewriting, so nginx forwards gRPC method paths verbatim. Defaults
+// backend-protocol to GRPC — the ingress terminates TLS and speaks
+// cleartext HTTP/2 (h2c) to the plugin gateway, same as any other gRPC
+// backend behind this ingress controller.
+func buildGRPCPluginIngress(instance *v1alpha1.OpenTalonInstance, name string, pi *v1alpha1.PluginIngressSpec) *networkingv1.Ingress {
+	annotations := map[string]string{
+		"nginx.ingress.kubernetes.io/backend-protocol": "GRPC",
+	}
+	for k, v := range pi.Annotations {
+		annotations[k] = v
+	}
+
+	pathType := networkingv1.PathTypePrefix
+	path := pi.Path
+	if path == "" {
+		path = "/"
+	}
+
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        PluginIngressName(instance, name),
+			Namespace:   instance.Namespace,
+			Labels:      Labels(instance),
+			Annotations: annotations,
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: pi.ClassName,
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: pi.Host,
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path:     path,
 									PathType: &pathType,
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{
