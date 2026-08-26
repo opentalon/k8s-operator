@@ -358,15 +358,29 @@ type PluginIngressSpec struct {
 	Host string `json:"host,omitempty"`
 
 	// Path is the HTTP path prefix routed to the plugin (e.g. "/weaviate").
+	// Ignored when protocol is GRPC, where routing is host-based and the
+	// plugin receives the full gRPC method path unrewritten.
 	// +kubebuilder:validation:Required
 	Path string `json:"path"`
 
-	// Port is the container port the plugin's HTTP server listens on.
-	// This must match the port configured in the plugin's config (e.g. http_addr: ":8082").
+	// Port is the container port the plugin's server listens on. For HTTP
+	// this must match the port configured in the plugin's config (e.g.
+	// http_addr: ":8082"); for GRPC it must match the plugin's grpc_port.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port int32 `json:"port"`
+
+	// Protocol selects how the Ingress routes to the plugin. HTTP (default)
+	// path-prefixes and rewrites to root, matching a plugin's own http_addr
+	// server. GRPC skips path rewriting (gRPC method paths are routed
+	// whole) and defaults the nginx.ingress.kubernetes.io/backend-protocol
+	// annotation to "GRPC" — for a plugin's external PluginService.Execute
+	// gateway (opentalon core's grpc_port), not its own HTTP server.
+	// +optional
+	// +kubebuilder:default="HTTP"
+	// +kubebuilder:validation:Enum=HTTP;GRPC
+	Protocol string `json:"protocol,omitempty"`
 
 	// TLSSecretName references a TLS Secret for HTTPS termination.
 	// +optional

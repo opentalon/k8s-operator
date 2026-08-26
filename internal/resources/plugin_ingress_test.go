@@ -115,6 +115,119 @@ func TestPluginIngress(t *testing.T) {
 	}
 }
 
+func TestPluginIngress_GRPC(t *testing.T) {
+	instance := &v1alpha1.OpenTalonInstance{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "opentalon",
+			Namespace: "opentalon",
+		},
+		Spec: v1alpha1.OpenTalonInstanceSpec{
+			Config: v1alpha1.ConfigSpec{
+				Plugins: map[string]v1alpha1.PluginConfig{
+					"talooner": {
+						Ingress: &v1alpha1.PluginIngressSpec{
+							Enabled:       true,
+							Host:          "talooner.zhisme.com",
+							Path:          "/",
+							Port:          50100,
+							Protocol:      "GRPC",
+							TLSSecretName: "talooner-tls",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ingress := resources.BuildPluginIngress(instance, "talooner", instance.Spec.Config.Plugins["talooner"])
+
+	// gRPC method paths must reach the plugin unrewritten — no
+	// rewrite-target, no regex capture groups mangling the path.
+	if _, ok := ingress.Annotations["nginx.ingress.kubernetes.io/rewrite-target"]; ok {
+		t.Error("GRPC ingress must not set rewrite-target")
+	}
+	if got := ingress.Annotations["nginx.ingress.kubernetes.io/backend-protocol"]; got != "GRPC" {
+		t.Errorf("backend-protocol: expected GRPC, got %q", got)
+	}
+
+	if len(ingress.Spec.Rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(ingress.Spec.Rules))
+	}
+	path := ingress.Spec.Rules[0].HTTP.Paths[0]
+	if path.Path != "/" {
+		t.Errorf("path: expected /, got %s", path.Path)
+	}
+	if path.Backend.Service.Port.Number != 50100 {
+		t.Errorf("port: expected 50100, got %d", path.Backend.Service.Port.Number)
+	}
+
+	if len(ingress.Spec.TLS) != 1 || ingress.Spec.TLS[0].SecretName != "talooner-tls" {
+		t.Error("expected TLS secret talooner-tls to be set")
+	}
+}
+
+// A user annotation for backend-protocol (or anything else) must win over
+// the GRPC default — same override behavior the HTTP path already has for
+// rewrite-target.
+func TestPluginIngress_GRPC_AnnotationOverride(t *testing.T) {
+	instance := &v1alpha1.OpenTalonInstance{
+		ObjectMeta: metav1.ObjectMeta{Name: "opentalon", Namespace: "opentalon"},
+		Spec: v1alpha1.OpenTalonInstanceSpec{
+			Config: v1alpha1.ConfigSpec{
+				Plugins: map[string]v1alpha1.PluginConfig{
+					"talooner": {
+						Ingress: &v1alpha1.PluginIngressSpec{
+							Enabled:  true,
+							Host:     "talooner.zhisme.com",
+							Path:     "/",
+							Port:     50100,
+							Protocol: "GRPC",
+							Annotations: map[string]string{
+								"nginx.ingress.kubernetes.io/backend-protocol": "GRPCS",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ingress := resources.BuildPluginIngress(instance, "talooner", instance.Spec.Config.Plugins["talooner"])
+	if got := ingress.Annotations["nginx.ingress.kubernetes.io/backend-protocol"]; got != "GRPCS" {
+		t.Errorf("backend-protocol: expected user override GRPCS, got %q", got)
+	}
+}
+
+// A user who copies an HTTP example's Path (Path is required by the CRD, so
+// there's always a value) must not get it used as a literal Prefix match —
+// GRPC routing is host-based and documented as ignoring Path entirely.
+func TestPluginIngress_GRPC_IgnoresNonRootPath(t *testing.T) {
+	instance := &v1alpha1.OpenTalonInstance{
+		ObjectMeta: metav1.ObjectMeta{Name: "opentalon", Namespace: "opentalon"},
+		Spec: v1alpha1.OpenTalonInstanceSpec{
+			Config: v1alpha1.ConfigSpec{
+				Plugins: map[string]v1alpha1.PluginConfig{
+					"talooner": {
+						Ingress: &v1alpha1.PluginIngressSpec{
+							Enabled:  true,
+							Host:     "talooner.zhisme.com",
+							Path:     "/weaviate", // copied from an HTTP example, must be ignored
+							Port:     50100,
+							Protocol: "GRPC",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ingress := resources.BuildPluginIngress(instance, "talooner", instance.Spec.Config.Plugins["talooner"])
+	path := ingress.Spec.Rules[0].HTTP.Paths[0]
+	if path.Path != "/" {
+		t.Errorf("path: expected / regardless of Path field, got %s", path.Path)
+	}
+}
+
 func TestPluginIngress_NoIngress(t *testing.T) {
 	instance := &v1alpha1.OpenTalonInstance{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
