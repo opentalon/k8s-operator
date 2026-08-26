@@ -198,6 +198,36 @@ func TestPluginIngress_GRPC_AnnotationOverride(t *testing.T) {
 	}
 }
 
+// A user who copies an HTTP example's Path (Path is required by the CRD, so
+// there's always a value) must not get it used as a literal Prefix match —
+// GRPC routing is host-based and documented as ignoring Path entirely.
+func TestPluginIngress_GRPC_IgnoresNonRootPath(t *testing.T) {
+	instance := &v1alpha1.OpenTalonInstance{
+		ObjectMeta: metav1.ObjectMeta{Name: "opentalon", Namespace: "opentalon"},
+		Spec: v1alpha1.OpenTalonInstanceSpec{
+			Config: v1alpha1.ConfigSpec{
+				Plugins: map[string]v1alpha1.PluginConfig{
+					"talooner": {
+						Ingress: &v1alpha1.PluginIngressSpec{
+							Enabled:  true,
+							Host:     "talooner.zhisme.com",
+							Path:     "/weaviate", // copied from an HTTP example, must be ignored
+							Port:     50100,
+							Protocol: "GRPC",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ingress := resources.BuildPluginIngress(instance, "talooner", instance.Spec.Config.Plugins["talooner"])
+	path := ingress.Spec.Rules[0].HTTP.Paths[0]
+	if path.Path != "/" {
+		t.Errorf("path: expected / regardless of Path field, got %s", path.Path)
+	}
+}
+
 func TestPluginIngress_NoIngress(t *testing.T) {
 	instance := &v1alpha1.OpenTalonInstance{
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},

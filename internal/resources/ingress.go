@@ -261,11 +261,13 @@ func buildGRPCPluginIngress(instance *v1alpha1.OpenTalonInstance, name string, p
 		annotations[k] = v
 	}
 
+	// Path is documented as ignored for GRPC (routing is host-based, gRPC
+	// method paths are routed whole) — but Path is required by the CRD, so a
+	// user who copies an HTTP example's Path (e.g. "/weaviate") would silently
+	// get a Prefix rule that never matches a gRPC method path, 404ing every
+	// call. Force root here so the doc is actually true, not just documented.
 	pathType := networkingv1.PathTypePrefix
-	path := pi.Path
-	if path == "" {
-		path = "/"
-	}
+	path := "/"
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
