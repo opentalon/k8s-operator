@@ -821,6 +821,30 @@ func statefulSetNeedsUpdate(existing, desired *appsv1.StatefulSet) bool {
 			return true
 		}
 	}
+	return podSchedulingNeedsUpdate(&existing.Spec.Template.Spec, &desired.Spec.Template.Spec)
+}
+
+// podSchedulingNeedsUpdate compares the pod-level placement fields the CR owns
+// outright: Affinity, NodeSelector and Tolerations. They reach the StatefulSet
+// when it is first created, but without this they never reach one that already
+// exists — an operator that only ever compares images, resources and env will
+// accept a spec edit, report the instance reconciled, and leave the pods
+// scheduled exactly as before. Nothing looks wrong; the constraint simply is
+// not there.
+//
+// Unlike resources, these are compared whole. There is no LimitRange-style
+// admission that fills them in behind the operator's back, so a difference is
+// a real difference and not a spurious diff on every reconcile.
+func podSchedulingNeedsUpdate(existing, desired *corev1.PodSpec) bool {
+	if !equality.Semantic.DeepEqual(existing.Affinity, desired.Affinity) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(existing.NodeSelector, desired.NodeSelector) {
+		return true
+	}
+	if !equality.Semantic.DeepEqual(existing.Tolerations, desired.Tolerations) {
+		return true
+	}
 	return false
 }
 

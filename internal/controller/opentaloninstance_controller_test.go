@@ -269,3 +269,68 @@ func TestStatefulSetNeedsUpdate(t *testing.T) {
 		}
 	})
 }
+
+// A placement constraint added after the StatefulSet exists has to reach it.
+// Without this the operator accepts the spec edit, reports the instance
+// reconciled, and leaves the pods scheduled exactly as they were — nothing
+// looks wrong and the constraint simply is not there.
+func TestStatefulSetNeedsUpdatePodPlacement(t *testing.T) {
+	replicas := int32(1)
+
+	affinity := &corev1.Affinity{
+		PodAntiAffinity: &corev1.PodAntiAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{{
+				Weight: 100,
+				PodAffinityTerm: corev1.PodAffinityTerm{
+					TopologyKey: "kubernetes.io/hostname",
+				},
+			}},
+		},
+	}
+
+	t.Run("affinity added", func(t *testing.T) {
+		existing := makeSts(replicas, "img:v1", "hash1")
+		desired := makeSts(replicas, "img:v1", "hash1")
+		desired.Spec.Template.Spec.Affinity = affinity
+		if !statefulSetNeedsUpdate(existing, desired) {
+			t.Error("want true when an affinity is added")
+		}
+	})
+
+	t.Run("affinity removed", func(t *testing.T) {
+		existing := makeSts(replicas, "img:v1", "hash1")
+		existing.Spec.Template.Spec.Affinity = affinity
+		desired := makeSts(replicas, "img:v1", "hash1")
+		if !statefulSetNeedsUpdate(existing, desired) {
+			t.Error("want true when an affinity is removed")
+		}
+	})
+
+	t.Run("node selector changed", func(t *testing.T) {
+		existing := makeSts(replicas, "img:v1", "hash1")
+		desired := makeSts(replicas, "img:v1", "hash1")
+		desired.Spec.Template.Spec.NodeSelector = map[string]string{"pool": "fast"}
+		if !statefulSetNeedsUpdate(existing, desired) {
+			t.Error("want true when the node selector changes")
+		}
+	})
+
+	t.Run("tolerations changed", func(t *testing.T) {
+		existing := makeSts(replicas, "img:v1", "hash1")
+		desired := makeSts(replicas, "img:v1", "hash1")
+		desired.Spec.Template.Spec.Tolerations = []corev1.Toleration{{Key: "dedicated", Operator: corev1.TolerationOpExists}}
+		if !statefulSetNeedsUpdate(existing, desired) {
+			t.Error("want true when tolerations change")
+		}
+	})
+
+	t.Run("identical placement stays false", func(t *testing.T) {
+		existing := makeSts(replicas, "img:v1", "hash1")
+		existing.Spec.Template.Spec.Affinity = affinity
+		desired := makeSts(replicas, "img:v1", "hash1")
+		desired.Spec.Template.Spec.Affinity = affinity.DeepCopy()
+		if statefulSetNeedsUpdate(existing, desired) {
+			t.Error("want false when placement is unchanged")
+		}
+	})
+}
