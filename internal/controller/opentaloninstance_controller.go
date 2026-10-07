@@ -17,6 +17,7 @@ package controller
 import (
 	"context"
 	cryptoRand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -646,6 +647,15 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateServiceMonitor(
 	if err != nil {
 		return err
 	}
+	raw, err := json.Marshal(desired.Object)
+	if err != nil {
+		return fmt.Errorf("marshal ServiceMonitor %s/%s: %w", desired.GetNamespace(), desired.GetName(), err)
+	}
+	normalized := map[string]interface{}{}
+	if err := json.Unmarshal(raw, &normalized); err != nil {
+		return fmt.Errorf("unmarshal ServiceMonitor %s/%s: %w", desired.GetNamespace(), desired.GetName(), err)
+	}
+	desired.Object = normalized
 	if equality.Semantic.DeepEqual(existing.Object["spec"], desired.Object["spec"]) &&
 		equality.Semantic.DeepEqual(existing.GetLabels(), desired.GetLabels()) {
 		return nil

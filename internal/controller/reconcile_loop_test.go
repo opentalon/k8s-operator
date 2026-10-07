@@ -16,8 +16,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,12 +33,15 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -50,14 +55,61 @@ const (
 	idleWindow     = 3 * time.Second
 )
 
-func startEnvtest(t *testing.T) client.Client {
+type countingClient struct {
+	client.Client
+	mu      sync.Mutex
+	updates map[string][]string
+	stsGets map[string]int
+}
+
+func (c *countingClient) kind(obj client.Object) string {
+	gvk, err := apiutil.GVKForObject(obj, c.Scheme())
+	if err != nil {
+		return fmt.Sprintf("%T", obj)
+	}
+	return gvk.Kind
+}
+
+func (c *countingClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	c.mu.Lock()
+	c.updates[obj.GetNamespace()] = append(c.updates[obj.GetNamespace()], c.kind(obj)+"/"+obj.GetName())
+	c.mu.Unlock()
+	return c.Client.Update(ctx, obj, opts...)
+}
+
+func (c *countingClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if _, ok := obj.(*appsv1.StatefulSet); ok {
+		c.mu.Lock()
+		c.stsGets[key.Namespace]++
+		c.mu.Unlock()
+	}
+	return c.Client.Get(ctx, key, obj, opts...)
+}
+
+func (c *countingClient) reset(namespace string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.updates[namespace] = nil
+	c.stsGets[namespace] = 0
+}
+
+func (c *countingClient) snapshot(namespace string) ([]string, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.updates[namespace]...), c.stsGets[namespace]
+}
+
+func startEnvtest(t *testing.T) (client.Client, *countingClient) {
 	t.Helper()
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("KUBEBUILDER_ASSETS is not set, run via make test")
 	}
 
 	testEnv := &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "config", "crd", "bases"),
+			filepath.Join("testdata", "crds"),
+		},
 		ErrorIfCRDPathMissing: true,
 	}
 	cfg, err := testEnv.Start()
@@ -86,8 +138,13 @@ func startEnvtest(t *testing.T) client.Client {
 	if err != nil {
 		t.Fatalf("create manager: %v", err)
 	}
+	counting := &countingClient{
+		Client:  mgr.GetClient(),
+		updates: map[string][]string{},
+		stsGets: map[string]int{},
+	}
 	r := &OpenTalonInstanceReconciler{
-		Client:   mgr.GetClient(),
+		Client:   counting,
 		Scheme:   mgr.GetScheme(),
 		Recorder: record.NewFakeRecorder(1024),
 	}
@@ -112,7 +169,7 @@ func startEnvtest(t *testing.T) client.Client {
 	if err != nil {
 		t.Fatalf("create client: %v", err)
 	}
-	return c
+	return c, counting
 }
 
 func waitFor(t *testing.T, what string, cond func() (bool, error)) {
@@ -152,6 +209,11 @@ func newLoopInstance(namespace string) *opentalon.OpenTalonInstance {
 			Availability: opentalon.AvailabilitySpec{
 				PodDisruptionBudget:     opentalon.PodDisruptionBudgetSpec{Enabled: true, MinAvailable: &minAvailable},
 				HorizontalPodAutoscaler: opentalon.HPASpec{Enabled: true, MaxReplicas: maxReplicas},
+			},
+			Observability: opentalon.ObservabilitySpec{
+				Metrics: opentalon.MetricsSpec{
+					ServiceMonitor: opentalon.ServiceMonitorSpec{Enabled: true},
+				},
 			},
 		},
 	}
@@ -208,6 +270,7 @@ func resourceVersions(t *testing.T, c client.Client, namespace string) map[strin
 		"NetworkPolicy":           &networkingv1.NetworkPolicyList{},
 		"PodDisruptionBudget":     &policyv1.PodDisruptionBudgetList{},
 		"HorizontalPodAutoscaler": &autoscalingv2.HorizontalPodAutoscalerList{},
+		"ServiceMonitor":          serviceMonitorList(),
 	}
 	out := map[string]string{}
 	for kind, list := range lists {
@@ -229,10 +292,50 @@ func resourceVersions(t *testing.T, c client.Client, namespace string) map[strin
 	return out
 }
 
+func serviceMonitorList() *unstructured.UnstructuredList {
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   resources.ServiceMonitorGroup,
+		Version: resources.ServiceMonitorVersion,
+		Kind:    resources.ServiceMonitorKind + "List",
+	})
+	return list
+}
+
+func serviceMonitor() *unstructured.Unstructured {
+	sm := &unstructured.Unstructured{}
+	sm.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   resources.ServiceMonitorGroup,
+		Version: resources.ServiceMonitorVersion,
+		Kind:    resources.ServiceMonitorKind,
+	})
+	return sm
+}
+
+func pokeStatefulSet(t *testing.T, c client.Client, key types.NamespacedName, value string) {
+	t.Helper()
+	sts := &appsv1.StatefulSet{}
+	if err := c.Get(context.Background(), key, sts); err != nil {
+		t.Fatalf("get StatefulSet %s: %v", key, err)
+	}
+	if sts.Annotations == nil {
+		sts.Annotations = map[string]string{}
+	}
+	sts.Annotations["test.opentalon.io/poke"] = value
+	if err := c.Update(context.Background(), sts); err != nil {
+		t.Fatalf("poke StatefulSet %s: %v", key, err)
+	}
+}
+
 func setupRunningInstance(t *testing.T, c client.Client, namespace string) *opentalon.OpenTalonInstance {
 	t.Helper()
+	return setupRunning(t, c, newLoopInstance(namespace))
+}
+
+func setupRunning(t *testing.T, c client.Client, inst *opentalon.OpenTalonInstance) *opentalon.OpenTalonInstance {
+	t.Helper()
+	namespace := inst.Namespace
 	createNamespace(t, c, namespace)
-	inst := newLoopInstance(namespace)
 	if err := c.Create(context.Background(), inst); err != nil {
 		t.Fatalf("create instance: %v", err)
 	}
@@ -243,7 +346,7 @@ func setupRunningInstance(t *testing.T, c client.Client, namespace string) *open
 }
 
 func TestReconcileLoop(t *testing.T) {
-	c := startEnvtest(t)
+	c, counting := startEnvtest(t)
 	ctx := context.Background()
 
 	t.Run("idle running instance stops writing", func(t *testing.T) {
@@ -254,12 +357,72 @@ func TestReconcileLoop(t *testing.T) {
 		time.Sleep(idleWindow)
 		after := resourceVersions(t, c, inst.Namespace)
 
-		if len(before) < 11 {
-			t.Fatalf("expected the instance and all ten child kinds to exist, got %d objects: %v", len(before), before)
+		if len(before) < 12 {
+			t.Fatalf("expected the instance and all eleven child kinds to exist, got %d objects: %v", len(before), before)
 		}
 		for name, rv := range before {
 			if after[name] != rv {
 				t.Errorf("%s resourceVersion changed from %s to %s on an idle instance", name, rv, after[name])
+			}
+		}
+	})
+
+	t.Run("reconcile without drift sends no child updates", func(t *testing.T) {
+		inst := setupRunningInstance(t, c, "noupdates")
+		stsKey := types.NamespacedName{Namespace: inst.Namespace, Name: resources.ResourceName(inst)}
+
+		time.Sleep(time.Second)
+		counting.reset(inst.Namespace)
+		pokeStatefulSet(t, c, stsKey, "1")
+		waitFor(t, "a reconcile triggered by the StatefulSet poke to reach syncStatus", func() (bool, error) {
+			_, gets := counting.snapshot(inst.Namespace)
+			return gets >= 2, nil
+		})
+		time.Sleep(500 * time.Millisecond)
+
+		updates, _ := counting.snapshot(inst.Namespace)
+		if len(updates) != 0 {
+			t.Errorf("expected no Update calls when nothing drifted, got %v", updates)
+		}
+	})
+
+	t.Run("NodePort survives a reconcile that updates the Service", func(t *testing.T) {
+		inst := newLoopInstance("nodeport")
+		inst.Spec.Networking.Service.Type = corev1.ServiceTypeNodePort
+		inst = setupRunning(t, c, inst)
+		name := types.NamespacedName{Namespace: inst.Namespace, Name: resources.ResourceName(inst)}
+
+		svc := &corev1.Service{}
+		if err := c.Get(ctx, name, svc); err != nil {
+			t.Fatalf("get service: %v", err)
+		}
+		wantNodePorts := map[string]int32{}
+		for _, p := range svc.Spec.Ports {
+			if p.NodePort == 0 {
+				t.Fatalf("port %s has no allocated nodePort on a NodePort Service", p.Name)
+			}
+			wantNodePorts[p.Name] = p.NodePort
+		}
+		svc.Labels["drift"] = "yes"
+		if err := c.Update(ctx, svc); err != nil {
+			t.Fatalf("update service labels: %v", err)
+		}
+		waitFor(t, "service drift label removed", func() (bool, error) {
+			got := &corev1.Service{}
+			if err := c.Get(ctx, name, got); err != nil {
+				return false, err
+			}
+			_, ok := got.Labels["drift"]
+			return !ok, nil
+		})
+
+		got := &corev1.Service{}
+		if err := c.Get(ctx, name, got); err != nil {
+			t.Fatalf("get service: %v", err)
+		}
+		for _, p := range got.Spec.Ports {
+			if p.NodePort != wantNodePorts[p.Name] {
+				t.Errorf("port %s nodePort changed from %d to %d after the operator updated the Service", p.Name, wantNodePorts[p.Name], p.NodePort)
 			}
 		}
 	})
@@ -435,11 +598,32 @@ func TestReconcileLoop(t *testing.T) {
 			}
 			return got.Spec.MaxReplicas == 3, nil
 		})
+
+		sm := serviceMonitor()
+		if err := c.Get(ctx, name, sm); err != nil {
+			t.Fatalf("get service monitor: %v", err)
+		}
+		if err := unstructured.SetNestedField(sm.Object, "hijacked", "spec", "jobLabel"); err != nil {
+			t.Fatalf("set service monitor jobLabel: %v", err)
+		}
+		if err := c.Update(ctx, sm); err != nil {
+			t.Fatalf("update service monitor: %v", err)
+		}
+		pokeStatefulSet(t, c, name, "drift")
+		waitFor(t, "service monitor jobLabel reverted", func() (bool, error) {
+			got := serviceMonitor()
+			if err := c.Get(ctx, name, got); err != nil {
+				return false, err
+			}
+			_, found, err := unstructured.NestedString(got.Object, "spec", "jobLabel")
+			return !found, err
+		})
 	})
 
 	t.Run("deletion still removes the finalizer", func(t *testing.T) {
 		inst := setupRunningInstance(t, c, "deletion")
 		key := client.ObjectKeyFromObject(inst)
+		time.Sleep(11 * time.Second)
 
 		live := &opentalon.OpenTalonInstance{}
 		if err := c.Get(ctx, key, live); err != nil {
