@@ -17,6 +17,7 @@ package controller
 import (
 	"context"
 	cryptoRand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -36,9 +37,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	opentalon "github.com/opentalon/k8s-operator/api/v1alpha1"
 	"github.com/opentalon/k8s-operator/internal/resources"
@@ -67,7 +70,7 @@ type OpenTalonInstanceReconciler struct {
 // for all owned resource types.
 func (r *OpenTalonInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opentalon.OpenTalonInstance{}).
+		For(&opentalon.OpenTalonInstance{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ConfigMap{}).
@@ -333,8 +336,6 @@ func (r *OpenTalonInstanceReconciler) reconcileResources(
 	patch := client.MergeFrom(instance.DeepCopy())
 	instance.Status.ManagedResources = managedResources
 	instance.Status.CurrentImage = resources.ImageRef(instance.Spec.Image)
-	now := metav1.Now()
-	instance.Status.LastUpdateTime = &now
 	instance.Status.ObservedGeneration = instance.Generation
 	if err := r.Status().Patch(ctx, instance, patch); err != nil && !apierrors.IsConflict(err) {
 		return err
@@ -380,6 +381,10 @@ func (r *OpenTalonInstanceReconciler) syncStatus(
 		phase = opentalon.PhaseRunning
 	}
 
+	if instance.Status.Phase != phase {
+		now := metav1.Now()
+		instance.Status.LastUpdateTime = &now
+	}
 	instance.Status.Phase = phase
 	r.setConditionOnInstance(instance, opentalon.ConditionStatefulSetReady,
 		func() (metav1.ConditionStatus, string, string) {
@@ -443,6 +448,9 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateServiceAccount(
 	}
 	if err != nil {
 		return err
+	}
+	if equality.Semantic.DeepEqual(existing.Labels, desired.Labels) {
+		return nil
 	}
 	existing.Labels = desired.Labels
 	return r.Update(ctx, existing) // reconcile-guard:allow
@@ -552,6 +560,13 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateService(
 	// Preserve ClusterIP which is immutable once assigned.
 	desired.Spec.ClusterIP = existing.Spec.ClusterIP
 	desired.ResourceVersion = existing.ResourceVersion
+	if existing.Spec.Type == desired.Spec.Type &&
+		equality.Semantic.DeepEqual(existing.Spec.Selector, desired.Spec.Selector) &&
+		servicePortsMatch(existing.Spec.Ports, desired.Spec.Ports) &&
+		equality.Semantic.DeepEqual(existing.Labels, desired.Labels) &&
+		equality.Semantic.DeepEqual(existing.Annotations, desired.Annotations) {
+		return nil
+	}
 	existing.Spec = desired.Spec
 	existing.Labels = desired.Labels
 	existing.Annotations = desired.Annotations
@@ -575,6 +590,11 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateIngress(
 		return err
 	}
 	desired.ResourceVersion = existing.ResourceVersion
+	if equality.Semantic.DeepEqual(existing.Spec, desired.Spec) &&
+		equality.Semantic.DeepEqual(existing.Labels, desired.Labels) &&
+		equality.Semantic.DeepEqual(existing.Annotations, desired.Annotations) {
+		return nil
+	}
 	existing.Spec = desired.Spec
 	existing.Labels = desired.Labels
 	existing.Annotations = desired.Annotations
@@ -596,6 +616,10 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateNetworkPolicy(
 	}
 	if err != nil {
 		return err
+	}
+	if equality.Semantic.DeepEqual(existing.Spec, desired.Spec) &&
+		equality.Semantic.DeepEqual(existing.Labels, desired.Labels) {
+		return nil
 	}
 	existing.Spec = desired.Spec
 	existing.Labels = desired.Labels
@@ -623,6 +647,19 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateServiceMonitor(
 	if err != nil {
 		return err
 	}
+	raw, err := json.Marshal(desired.Object)
+	if err != nil {
+		return fmt.Errorf("marshal ServiceMonitor %s/%s: %w", desired.GetNamespace(), desired.GetName(), err)
+	}
+	normalized := map[string]interface{}{}
+	if err := json.Unmarshal(raw, &normalized); err != nil {
+		return fmt.Errorf("unmarshal ServiceMonitor %s/%s: %w", desired.GetNamespace(), desired.GetName(), err)
+	}
+	desired.Object = normalized
+	if equality.Semantic.DeepEqual(existing.Object["spec"], desired.Object["spec"]) &&
+		equality.Semantic.DeepEqual(existing.GetLabels(), desired.GetLabels()) {
+		return nil
+	}
 	desired.SetResourceVersion(existing.GetResourceVersion())
 	return r.Update(ctx, desired) // reconcile-guard:allow
 }
@@ -642,6 +679,10 @@ func (r *OpenTalonInstanceReconciler) createOrUpdatePDB(
 	}
 	if err != nil {
 		return err
+	}
+	if equality.Semantic.DeepEqual(existing.Spec, desired.Spec) &&
+		equality.Semantic.DeepEqual(existing.Labels, desired.Labels) {
+		return nil
 	}
 	existing.Spec = desired.Spec
 	existing.Labels = desired.Labels
@@ -667,6 +708,10 @@ func (r *OpenTalonInstanceReconciler) createOrUpdateHPA(
 	}
 	if err != nil {
 		return err
+	}
+	if equality.Semantic.DeepEqual(existing.Spec, desired.Spec) &&
+		equality.Semantic.DeepEqual(existing.Labels, desired.Labels) {
+		return nil
 	}
 	existing.Spec = desired.Spec
 	existing.Labels = desired.Labels
@@ -742,6 +787,9 @@ func (r *OpenTalonInstanceReconciler) setPhase(
 	instance *opentalon.OpenTalonInstance,
 	phase string,
 ) error {
+	if instance.Status.Phase == phase {
+		return nil
+	}
 	patch := client.MergeFrom(instance.DeepCopy())
 	instance.Status.Phase = phase
 	now := metav1.Now()
@@ -881,4 +929,20 @@ func resourcesNeedUpdate(existing, desired corev1.ResourceRequirements) bool {
 		return true
 	}
 	return false
+}
+
+func servicePortsMatch(existing, desired []corev1.ServicePort) bool {
+	if len(existing) != len(desired) {
+		return false
+	}
+	for i := range desired {
+		e, d := existing[i], desired[i]
+		if e.Name != d.Name || e.Port != d.Port || e.Protocol != d.Protocol || e.TargetPort != d.TargetPort {
+			return false
+		}
+		if d.NodePort != 0 && e.NodePort != d.NodePort {
+			return false
+		}
+	}
+	return true
 }
