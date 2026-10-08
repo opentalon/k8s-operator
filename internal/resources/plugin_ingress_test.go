@@ -124,14 +124,14 @@ func TestPluginIngress_GRPC(t *testing.T) {
 		Spec: v1alpha1.OpenTalonInstanceSpec{
 			Config: v1alpha1.ConfigSpec{
 				Plugins: map[string]v1alpha1.PluginConfig{
-					"talooner": {
+					"review": {
 						Ingress: &v1alpha1.PluginIngressSpec{
 							Enabled:       true,
-							Host:          "talooner.zhisme.com",
+							Host:          "review.example.com",
 							Path:          "/",
 							Port:          50100,
 							Protocol:      "GRPC",
-							TLSSecretName: "talooner-tls",
+							TLSSecretName: "review-tls",
 						},
 					},
 				},
@@ -139,7 +139,7 @@ func TestPluginIngress_GRPC(t *testing.T) {
 		},
 	}
 
-	ingress := resources.BuildPluginIngress(instance, "talooner", instance.Spec.Config.Plugins["talooner"])
+	ingress := resources.BuildPluginIngress(instance, "review", instance.Spec.Config.Plugins["review"])
 
 	// gRPC method paths must reach the plugin unrewritten — no
 	// rewrite-target, no regex capture groups mangling the path.
@@ -161,8 +161,8 @@ func TestPluginIngress_GRPC(t *testing.T) {
 		t.Errorf("port: expected 50100, got %d", path.Backend.Service.Port.Number)
 	}
 
-	if len(ingress.Spec.TLS) != 1 || ingress.Spec.TLS[0].SecretName != "talooner-tls" {
-		t.Error("expected TLS secret talooner-tls to be set")
+	if len(ingress.Spec.TLS) != 1 || ingress.Spec.TLS[0].SecretName != "review-tls" {
+		t.Error("expected TLS secret review-tls to be set")
 	}
 }
 
@@ -175,10 +175,10 @@ func TestPluginIngress_GRPC_AnnotationOverride(t *testing.T) {
 		Spec: v1alpha1.OpenTalonInstanceSpec{
 			Config: v1alpha1.ConfigSpec{
 				Plugins: map[string]v1alpha1.PluginConfig{
-					"talooner": {
+					"review": {
 						Ingress: &v1alpha1.PluginIngressSpec{
 							Enabled:  true,
-							Host:     "talooner.zhisme.com",
+							Host:     "review.example.com",
 							Path:     "/",
 							Port:     50100,
 							Protocol: "GRPC",
@@ -192,7 +192,7 @@ func TestPluginIngress_GRPC_AnnotationOverride(t *testing.T) {
 		},
 	}
 
-	ingress := resources.BuildPluginIngress(instance, "talooner", instance.Spec.Config.Plugins["talooner"])
+	ingress := resources.BuildPluginIngress(instance, "review", instance.Spec.Config.Plugins["review"])
 	if got := ingress.Annotations["nginx.ingress.kubernetes.io/backend-protocol"]; got != "GRPCS" {
 		t.Errorf("backend-protocol: expected user override GRPCS, got %q", got)
 	}
@@ -207,10 +207,10 @@ func TestPluginIngress_GRPC_IgnoresNonRootPath(t *testing.T) {
 		Spec: v1alpha1.OpenTalonInstanceSpec{
 			Config: v1alpha1.ConfigSpec{
 				Plugins: map[string]v1alpha1.PluginConfig{
-					"talooner": {
+					"review": {
 						Ingress: &v1alpha1.PluginIngressSpec{
 							Enabled:  true,
-							Host:     "talooner.zhisme.com",
+							Host:     "review.example.com",
 							Path:     "/weaviate", // copied from an HTTP example, must be ignored
 							Port:     50100,
 							Protocol: "GRPC",
@@ -221,7 +221,7 @@ func TestPluginIngress_GRPC_IgnoresNonRootPath(t *testing.T) {
 		},
 	}
 
-	ingress := resources.BuildPluginIngress(instance, "talooner", instance.Spec.Config.Plugins["talooner"])
+	ingress := resources.BuildPluginIngress(instance, "review", instance.Spec.Config.Plugins["review"])
 	path := ingress.Spec.Rules[0].HTTP.Paths[0]
 	if path.Path != "/" {
 		t.Errorf("path: expected / regardless of Path field, got %s", path.Path)
